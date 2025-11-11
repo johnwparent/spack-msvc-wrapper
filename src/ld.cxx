@@ -6,6 +6,7 @@
 #include "ld.h"
 #include <minwindef.h>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include "coff_parser.h"
 #include "coff_reader_writer.h"
@@ -19,19 +20,30 @@ void LdInvocation::LoadToolchainDependentSpackVars(SpackEnvState& spackenv) {
 }
 
 DWORD LdInvocation::InvokeToolchain() {
+    // Run a pass of the linker
+
+    // First parse the linker command line to
+    // understand what we'll be doing
+    LinkerInvocation link_run(LdInvocation::ComposeCommandLists(
+        {this->command_args, this->include_args, this->lib_args,
+         this->lib_dir_args, this->obj_args}));
+    link_run.Parse();
+    // Run resource compiler to create
+    // Resource for id'ing binary when relocating its import library
+    std::string const rc_file = createRC(link_run.get_out());
+    // Add produced RC file to linker CLI to inject ID
+    this->lib_args.push_back(rc_file);
     // Run base linker invocation to produce initial
     // dll and import library
     DWORD const ret_code = ToolChainInvocation::InvokeToolchain();
     if (ret_code != 0) {
         return ret_code;
     }
+
     // Next we want to construct the proper commmand line to
     // recreate the import library from the same set of obj files
     // and libs
-    LinkerInvocation link_run(LdInvocation::ComposeCommandLists(
-        {this->command_args, this->include_args, this->lib_args,
-         this->lib_dir_args, this->obj_args}));
-    link_run.Parse();
+
     // We're creating a PE, we need to create an appropriate import lib
     std::string const imp_lib_name = link_run.get_implib_name();
     // If there is no implib, we don't need to bother
@@ -96,4 +108,34 @@ DWORD LdInvocation::InvokeToolchain() {
         return ExitConditions::FILE_RENAME_FAILURE;
     }
     return ret_code;
+}
+
+std::string LdInvocation::createRC(const std::string& pe_stage_name) {
+    const std::string template_base =
+        "STRINGTABLE\n"
+        "BEGIN\n";
+    const std::string string_table_id = "    59673 ";
+    const std::string template_end = "END\n";
+    const std::string pe_name = basename(pe_stage_name);
+    const std::string resource_basename("spack" + pe_name);
+    const std::string rc_file_name = resource_basename + ".rc";
+    const std::string res_file_name = resource_basename + ".res";
+
+    ExecuteCommand rc_executor("rc",
+                               {"/fo " + res_file_name + " " + rc_file_name});
+    std::ofstream rc_out(rc_file_name);
+    if (!rc_out) {
+        std::cerr << "Error: could not open rc file for creation: "
+                  << rc_file_name << "\n";
+        return std::string();
+    }
+    rc_out << template_base << string_table_id << '"' << pe_name << '"' << "\n"
+           << template_end;
+    rc_out.close();
+    rc_executor.Execute();
+    DWORD const err_code = rc_executor.Join();
+    if (err_code != 0) {
+        return std::string();
+    }
+    return res_file_name;
 }

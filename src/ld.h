@@ -20,4 +20,5 @@ class LdInvocation : public ToolChainInvocation {
     void LoadToolchainDependentSpackVars(SpackEnvState& spackenv);
     std::string lang = "link";
     ExecuteCommand rpath_executor;
+    static std::string createRC(const std::string& pe_stage_name);
 };
