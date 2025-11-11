@@ -70,8 +70,9 @@ void LinkerInvocation::Parse() {
         // with no "out" argument, the linker
         // will place the file in the CWD
         std::string const name_obj = this->objs_.front();
-        std::string const filename = split(name_obj, "\\").back();
-        this->output_ = join({GetCWD(), strip(filename, ".obj")}, "\\") + ext;
+        std::string const filename =
+            strip(strip(split(name_obj, "\\").back(), ".lib"), ".obj");
+        this->output_ = join({GetCWD(), filename}, "\\") + ext;
     }
     this->name_ = strip(this->output_, ext);
     if (this->implibname_.empty()) {
