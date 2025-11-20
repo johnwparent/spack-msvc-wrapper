@@ -116,10 +116,9 @@ std::string LdInvocation::createRC(const std::string& pe_stage_name) {
         "BEGIN\n";
     const std::string string_table_id = "    59673 ";
     const std::string template_end = "END\n";
-    const std::string pe_name = basename(pe_stage_name);
-    const std::string resource_basename("spack" + pe_name);
-    const std::string rc_file_name = resource_basename + ".rc";
-    const std::string res_file_name = resource_basename + ".res";
+    const std::string pe_name = stripLastExt(basename(pe_stage_name));
+    const std::string rc_file_name = pe_name + ".rc";
+    std::string res_file_name = pe_name + ".res";
 
     ExecuteCommand rc_executor("rc",
                                {"/fo " + res_file_name + " " + rc_file_name});
