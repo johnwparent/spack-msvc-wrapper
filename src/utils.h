@@ -383,12 +383,16 @@ class SFNProcessingError : public std::runtime_error {
       virtual char  const* what() const;
 };
 
+class RCCompilerFailure : public std::runtime_error {
+   public:
+    RCCompilerFailure(char const* const message);
+    virtual char const* what() const;
+};
+
 class FileIOError : public std::runtime_error {
    public:
     FileIOError(char const* const message);
     virtual char const* what() const;
 };
-
-
 
 static bool DEBUG = false;
