@@ -311,6 +311,7 @@ class ScopedFileAccess {
     explicit ScopedFileAccess(std::wstring file_path,
                               DWORD desired_access = GENERIC_WRITE);
     ~ScopedFileAccess();
+    void Access();
 
     bool IsAccessGranted() const;
 

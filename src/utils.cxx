@@ -907,6 +907,12 @@ bool FileSecurity::HasPermission(const std::wstring& file_path,
     return (effective_rights & access_mask) == access_mask;
 }
 
+/**
+ * \param file_path path to the file for which we are granting a permission
+ * \param access_mask the bitmask for the ACE permissions being requested
+ * \param sid pointer to the security identifier for a given trustee (typically the current user)
+ * \param out_old_sid output param, pointer to variable containing pointer to the pre-modified DACL
+ */
 bool FileSecurity::GrantPermission(const std::wstring& file_path,
                                    DWORD access_mask, PSID sid,
                                    PSECURITY_DESCRIPTOR* out_old_sd) {
@@ -952,7 +958,7 @@ bool FileSecurity::ApplyDescriptor(const std::wstring& file_path,
     BOOL defaulted = FALSE;
     PACL dacl = nullptr;
     if (!::GetSecurityDescriptorDacl(sd, &present, &dacl, &defaulted) ||
-        !present)
+        !present || !dacl)
         return false;
 
     return ::SetNamedSecurityInfoW(const_cast<LPWSTR>(file_path.c_str()),
@@ -983,7 +989,11 @@ ScopedFileAccess::ScopedFileAccess(std::wstring file_path, DWORD desired_access)
       acl_needs_revert_(false),
       original_attributes_(0),
       attributes_changed_(false) {
+}
 
+void ScopedFileAccess::Access() {
+    
+    
     // We must ensure we have permissions *first* before we try to
     // change the file attributes in Phase 2.
 
@@ -992,7 +1002,7 @@ ScopedFileAccess::ScopedFileAccess(std::wstring file_path, DWORD desired_access)
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to get SID");
     }
-
+    
     // Check if we need to modify ACLs
     if (!FileSecurity::HasPermission(file_path_, desired_access_,
                                      current_user_sid_.get())) {
@@ -1044,9 +1054,6 @@ ScopedFileAccess::~ScopedFileAccess() {
 }
 
 bool ScopedFileAccess::IsAccessGranted() const {
-    // If we had to change anything, we assume success (constructor would throw otherwise)
-    if (acl_needs_revert_ || attributes_changed_)
-        return true;
 
     return FileSecurity::HasPermission(file_path_, desired_access_,
                                        current_user_sid_.get());
