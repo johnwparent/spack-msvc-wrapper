@@ -912,6 +912,8 @@ bool FileSecurity::HasPermission(const std::wstring& file_path,
  * \param access_mask the bitmask for the ACE permissions being requested
  * \param sid pointer to the security identifier for a given trustee (typically the current user)
  * \param out_old_sid output param, pointer to variable containing pointer to the pre-modified DACL
+ *                      useful to determine whether the security descriptor has been modified and
+ *                      provide a baseline sid
  */
 bool FileSecurity::GrantPermission(const std::wstring& file_path,
                                    DWORD access_mask, PSID sid,
