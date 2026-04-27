@@ -265,7 +265,7 @@ bool LibRename::ComputeDefFile() {
     // Read until the output column titles
     while (std::getline(input_file, line)) {
         std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
-        if (search_res.empty()) break;
+        if (!search_res.empty()) break;
         std::string const res = search_res.str();
         if (!res.empty()) {
             break;
@@ -281,7 +281,7 @@ bool LibRename::ComputeDefFile() {
             break;
         }
         output_file << "    "
-                    << regexMatch(line, R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)")
+                    << regexMatch(line, R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)").str(1)
                     << '\n';
     }
     input_file.close();
