@@ -906,10 +906,11 @@ void PathRelocator::parseRelocate() {
 }
 
 std::string PathRelocator::getRelocation(std::string const& pe) {
+    std::string unpadded_pe = strip_padding(pe);
     if (this->bc_) {
-        return this->relocateBC(pe);
+        return this->relocateBC(unpadded_pe);
     }
-    return this->relocateStage(pe);
+    return this->relocateStage(unpadded_pe);
 }
 
 std::string PathRelocator::relocateBC(std::string const& pe) {
