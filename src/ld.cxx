@@ -185,7 +185,7 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         throw RCCompilerFailure("Could not open RC file");
     }
     std::string abs_out = EnsureValidLengthPath(
-        CannonicalizePath(MakePathAbsolute(pe_stage_name)));
+        CanonicalizePath(MakePathAbsolute(pe_stage_name)));
     char* chr_abs_out = new char[abs_out.length() + 1];
     strcpy(chr_abs_out, abs_out.c_str());
     char* padded_path =
