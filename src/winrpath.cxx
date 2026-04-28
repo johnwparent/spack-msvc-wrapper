@@ -22,6 +22,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <regex>
 
@@ -35,7 +36,7 @@
  * \param name The dll name to check for path characters
  * 
 */
-bool LibRename::SpackCheckForDll(const std::string& dll_path) const {
+bool LibRename::SpackCheckForDll(const std::string& dll_path) {
     return hasPathCharacters(dll_path);
 }
 
@@ -50,38 +51,28 @@ bool LibRename::SpackCheckForDll(const std::string& dll_path) const {
  *                  the dll name found at `name_loc` to the absolute path of
  * 
 */
-bool LibRename::RenameDll(char* name_loc, const std::string& dll_path) const {
+bool LibRename::RenameDll(char* name_loc, const std::string& dll_path) {
     if (SpackInstalledLib(dll_path)) {
         return true;
     }
-    std::string const file_name = basename(dll_path);
-    if (file_name.empty()) {
-        std::cerr << "Unable to extract filename from dll for relocation"
-                    << "\n";
+    PathRelocator relocator;
+    std::string new_loc = relocator.getRelocation(dll_path);
+    if (new_loc.empty()) {
+        std::cerr << "Cannot find relocation mapping for library " << dll_path
+                  << "\n";
         return false;
     }
-    LibraryFinder lib_finder;
-    std::string new_library_loc =
-        lib_finder.FindLibrary(file_name, dll_path);
-    if (new_library_loc.empty()) {
-        std::cerr << "Unable to find library " << file_name << " from "
-                    << dll_path << " for relocation" << "\n";
+    try {
+        new_loc =
+            EnsureValidLengthPath(CanonicalizePath(MakePathAbsolute(new_loc)));
+    } catch (NameTooLongError& e) {
+        std::cerr << "Cannot relocate path " << new_loc
+                  << "it is too long to be relocated safely.\n";
         return false;
     }
-    if (new_library_loc.length() > MAX_NAME_LEN) {
-        try {
-            new_library_loc = short_name(new_library_loc);
-        } catch (NameTooLongError& e) {
-            return false;
-        } catch (FileNotExist &e) {
-            return false;
-        } catch (SFNProcessingError &e) {
-            return false;
-        }
-    }
+
     char* new_lib_pth =
-        pad_path(new_library_loc.c_str(),
-                    static_cast<DWORD>(new_library_loc.size()));
+        pad_path(new_loc.c_str(), static_cast<DWORD>(new_loc.size()));
     if (!new_lib_pth) {
         return false;
     }
@@ -176,8 +167,8 @@ bool LibRename::FindDllAndRename(HANDLE& pe_in) {
             import_table_offset +
             (import_image_descriptor->Name - rva_import_directory);
         std::string const str_dll_name = std::string(imported_dll);
-        if (this->SpackCheckForDll(str_dll_name)) {
-            if (!this->RenameDll(imported_dll, str_dll_name)) {
+        if (LibRename::SpackCheckForDll(str_dll_name)) {
+            if (!LibRename::RenameDll(imported_dll, str_dll_name)) {
                 std::cerr << "Unable to relocate DLL reference: "
                           << str_dll_name << "\n";
                 return false;
@@ -209,6 +200,7 @@ bool LibRename::FindDllAndRename(HANDLE& pe_in) {
 */
 LibRename::LibRename(std::string p_exe, bool full, bool replace)
     : replace(replace), full(full), pe(std::move(p_exe)) {
+    this->pe = MakePathAbsolute(this->pe);
 }
 
 LibRename::LibRename(std::string p_exe, std::string coff, bool full,
@@ -217,6 +209,7 @@ LibRename::LibRename(std::string p_exe, std::string coff, bool full,
       full(full),
       pe(std::move(p_exe)),
       coff(std::move(coff)) {
+    this->pe = MakePathAbsolute(this->pe);
     std::string const coff_path = stem(this->coff);
     this->tmp_def_file = coff_path + "-tmp.def";
     this->def_file = coff_path + ".def";
@@ -272,7 +265,7 @@ bool LibRename::ComputeDefFile() {
     // Read until the output column titles
     while (std::getline(input_file, line)) {
         std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
-        if (search_res.empty()) break;
+        if (!search_res.empty()) break;
         std::string const res = search_res.str();
         if (!res.empty()) {
             break;
@@ -287,7 +280,9 @@ bool LibRename::ComputeDefFile() {
                 npos) {  // Skip header in export block if still present
             break;
         }
-        output_file << "    " << regexReplace(line, R"(\s+)", "") << '\n';
+        output_file << "    "
+                    << regexMatch(line, R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)").str(1)
+                    << '\n';
     }
     input_file.close();
     output_file.close();
@@ -402,15 +397,23 @@ bool LibRename::ExecutePERename() {
         std::cerr << e.what() << "\n";
         return false;
     }
-    HANDLE pe_handle = CreateFileW(
-        pe_path.c_str(), (GENERIC_READ | GENERIC_WRITE), FILE_SHARE_READ,
-        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (!pe_handle || pe_handle == INVALID_HANDLE_VALUE) {
-        std::cerr << "Unable to acquire file handle to " << pe_path.c_str()
-                  << ": " << reportLastError() << "\n";
+    try {
+        ScopedFileAccess const obtain_write(pe_path, GENERIC_ALL);
+        HANDLE pe_handle = CreateFileW(
+            pe_path.c_str(), (GENERIC_READ | GENERIC_WRITE), FILE_SHARE_WRITE,
+            nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (!pe_handle || pe_handle == INVALID_HANDLE_VALUE) {
+            std::cerr << "Unable to acquire file handle to "
+                      << ConvertWideToASCII(pe_path) << ": "
+                      << reportLastError() << "\n";
+            return false;
+        }
+        return LibRename::FindDllAndRename(pe_handle);
+    } catch (const std::system_error& e) {
+        std::cerr << "Could not obtain write access: " << e.what()
+                  << " (Error Code: " << e.code().value() << ")" << '\n';
         return false;
     }
-    return this->FindDllAndRename(pe_handle);
 }
 
 /* Construct the line needed to produce a new import library
