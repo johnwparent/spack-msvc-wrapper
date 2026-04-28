@@ -33,11 +33,13 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <memory>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 #include <array>
 #include "shlwapi.h"
@@ -1259,6 +1261,13 @@ SFNProcessingError::SFNProcessingError(char const* const message)
     : std::runtime_error(message) {}
 
 char const* SFNProcessingError::what() const {
+    return exception::what();
+}
+
+RCCompilerFailure::RCCompilerFailure(char const* const message)
+    : std::runtime_error(message) {}
+
+char const* RCCompilerFailure::what() const {
     return exception::what();
 }
 
