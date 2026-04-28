@@ -29,8 +29,7 @@ DWORD LdInvocation::InvokeToolchain() {
     // recreate the import library from the same set of obj files
     // and libs
     LinkerInvocation link_run(LdInvocation::ComposeCommandLists(
-        {this->command_args, this->include_args, this->lib_args,
-         this->lib_dir_args, this->obj_args}));
+        {this->inputs}));
     link_run.Parse();
     // We're creating a PE, we need to create an appropriate import lib
     std::string const imp_lib_name = link_run.get_implib_name();
@@ -61,10 +60,7 @@ DWORD LdInvocation::InvokeToolchain() {
         ExecuteCommand("lib.exe", LdInvocation::ComposeCommandLists({
                                       {def, piped_args, "-name:" + pe_name,
                                        "-out:" + abs_out_imp_lib_name},
-                                      {link_run.get_rsp_file()},
-                                      this->obj_args,
-                                      this->lib_args,
-                                      this->lib_dir_args,
+                                      link_run.get_input_files(),
                                   }));
     this->rpath_executor.Execute();
     DWORD const err_code = this->rpath_executor.Join();

@@ -1261,3 +1261,10 @@ SFNProcessingError::SFNProcessingError(char const* const message)
 char const* SFNProcessingError::what() const {
     return exception::what();
 }
+
+FileIOError::FileIOError(char const* const message)
+    : std::runtime_error(message) {}
+
+char const* FileIOError::what() const {
+    return exception::what();
+}
