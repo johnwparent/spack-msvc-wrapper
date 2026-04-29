@@ -180,7 +180,14 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to get TEMP PATH");
     }
-    std::string rc_tmp_dir = join({std::string(temp_dir_buffer.data()), std::to_string(_getpid()), "spack"}, "\\");
+    std::string rc_tmp_dir = join({std::string(temp_dir_buffer.data()), std::to_string(_getpid())}, "");
+    if(!CreateDirectoryA(rc_tmp_dir.c_str(), NULL)){
+        DWORD err = ::GetLastError();
+        if (err != ERROR_ALREADY_EXISTS) {
+            throw std::system_error(static_cast<int>(err),
+                                std::system_category(), "Failed to make directory");
+        }
+    }
     // This res file name needs to mirror the PE name _exactly_
     // Otherwise the RC file will override the default
     // or user set name, violating user expectation
