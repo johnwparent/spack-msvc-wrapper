@@ -52,6 +52,11 @@ DWORD LdInvocation::InvokeToolchain() {
         return ret_code;
     }
 
+    if(!DeleteFile2A(rc_file.c_str(), FILE_FLAG_DISALLOW_PATH_REDIRECTS)) {
+        throw std::system_error(static_cast<int>(::GetLastError()),
+                                std::system_category(), "Failed to remove intermediate rc file");
+    }
+
     // We're creating a PE, we need to create an appropriate import lib
     std::string const imp_lib_name = link_run.get_implib_name();
 
@@ -175,8 +180,7 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to get TEMP PATH");
     }
-
-    std::string rc_tmp_dir = std::string(temp_dir_buffer.data());
+    std::string rc_tmp_dir = join({std::string(temp_dir_buffer.data()), std::to_string(_getpid()), "spack"}, "\\");
     // This res file name needs to mirror the PE name _exactly_
     // Otherwise the RC file will override the default
     // or user set name, violating user expectation
@@ -213,6 +217,10 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
     DWORD const err_code = rc_executor.Join();
     if (err_code != 0) {
         throw RCCompilerFailure("Could not compile RC file");
+    }
+    if(!DeleteFile2A(rc_file_name.c_str(), FILE_FLAG_DISALLOW_PATH_REDIRECTS)) {
+        throw std::system_error(static_cast<int>(::GetLastError()),
+                                std::system_category(), "Failed to remove intermediate rc file");
     }
     return res_file_name;
 }
