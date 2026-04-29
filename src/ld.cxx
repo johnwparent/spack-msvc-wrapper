@@ -5,6 +5,7 @@
  */
 #include "ld.h"
 #include <minwindef.h>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -167,14 +168,25 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         "BEGIN\n";
     const std::string template_end = "END\n";
     const std::string pe_name = stripLastExt(basename(pe_stage_name));
-    const std::string rc_file_name = "spack-" + pe_name + ".rc";
+    const std::string base_rc_file_name = "spack-" + pe_name + ".rc";
+
+    std::array<char, MAX_PATH> temp_dir_buffer;
+    if (!GetTempPath2A(MAX_PATH, temp_dir_buffer.data())) {
+        throw std::system_error(static_cast<int>(::GetLastError()),
+                                std::system_category(), "Failed to get TEMP PATH");
+    }
+
+    std::string rc_tmp_dir = std::string(temp_dir_buffer.data());
     // This res file name needs to mirror the PE name _exactly_
     // Otherwise the RC file will override the default
     // or user set name, violating user expectation
-    std::string res_file_name = pe_name + ".res";
+    std::string base_res_file_name = pe_name + ".res";
     if (!link_run.get_rc_files().empty()) {
-        res_file_name = "spack-" + res_file_name;
+        base_res_file_name = "spack-" + base_res_file_name;
     }
+
+    const std::string res_file_name = join({rc_tmp_dir, base_rc_file_name}, "\\");
+    const std::string rc_file_name = join({rc_tmp_dir, base_res_file_name}, "\\");
 
     ExecuteCommand rc_executor("rc",
                                {"/fo" + res_file_name + " " + rc_file_name});
