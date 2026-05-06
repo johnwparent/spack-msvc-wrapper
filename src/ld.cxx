@@ -51,12 +51,12 @@ DWORD LdInvocation::InvokeToolchain() {
     if (ret_code != 0) {
         return ret_code;
     }
-
+    debug("hello!");
     if(!DeleteFile2A(rc_file.c_str(), FILE_FLAG_DISALLOW_PATH_REDIRECTS)) {
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to remove intermediate rc file");
     }
-
+    debug("hello!");
     // We're creating a PE, we need to create an appropriate import lib
     std::string const imp_lib_name = link_run.get_implib_name();
 
@@ -196,8 +196,8 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         base_res_file_name = "spack-" + base_res_file_name;
     }
 
-    const std::string res_file_name = join({rc_tmp_dir, base_rc_file_name}, "\\");
-    const std::string rc_file_name = join({rc_tmp_dir, base_res_file_name}, "\\");
+    const std::string res_file_name = join({rc_tmp_dir, base_res_file_name}, "\\");
+    const std::string rc_file_name = join({rc_tmp_dir, base_rc_file_name}, "\\");
 
     ExecuteCommand rc_executor("rc",
                                {"/fo" + res_file_name + " " + rc_file_name});
