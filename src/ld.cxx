@@ -4,19 +4,29 @@
  * SPDX-License-Identifier: (Apache-2.0 OR MIT)
  */
 #include "ld.h"
+#include <errhandlingapi.h>
+#include <fileapi.h>
 #include <minwindef.h>
+#include <process.h>
+#include <winbase.h>
+#include <winerror.h>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <system_error>
+#include <string>
+#include <utility>
 #include "coff_parser.h"
 #include "coff_reader_writer.h"
 #include "linker_invocation.h"
 #include "spack_env.h"
 #include "toolchain.h"
 #include "utils.h"
+
 
 void LdInvocation::LoadToolchainDependentSpackVars(SpackEnvState& spackenv) {
     this->command = spackenv.SpackLD;
@@ -29,7 +39,7 @@ DWORD LdInvocation::InvokeToolchain() {
     // understand what we'll be doing
     LinkerInvocation link_run(this->inputs);
     link_run.Parse();
-    std::string rc_file;
+    std::unique_ptr<RCFileManager> rc_file;
     try {
         // Run resource compiler to create
         // Resource for id'ing binary when relocating its import library
@@ -44,19 +54,13 @@ DWORD LdInvocation::InvokeToolchain() {
     // file the linker sees (or is referenced in the case of an rsp)
     // otherwise this resource file will dictate the binairies
     // name, which will break client expectations
-    this->inputs.push_back(rc_file);
+    this->inputs.push_back(rc_file->getRC());
     // Run base linker invocation to produce initial
     // dll and import library
     DWORD const ret_code = ToolChainInvocation::InvokeToolchain();
     if (ret_code != 0) {
         return ret_code;
     }
-
-    if(!DeleteFile2A(rc_file.c_str(), FILE_FLAG_DISALLOW_PATH_REDIRECTS)) {
-        throw std::system_error(static_cast<int>(::GetLastError()),
-                                std::system_category(), "Failed to remove intermediate rc file");
-    }
-
     // We're creating a PE, we need to create an appropriate import lib
     std::string const imp_lib_name = link_run.get_implib_name();
 
@@ -166,7 +170,8 @@ DWORD LdInvocation::InvokeToolchain() {
     return ret_code;
 }
 
-std::string LdInvocation::createRC(LinkerInvocation& link_run) {
+
+std::unique_ptr<RCFileManager> LdInvocation::createRC(LinkerInvocation& link_run) {
     const std::string pe_stage_name = link_run.get_out();
     const std::string template_base =
         "spack SPACKRESOURCE\n"
@@ -180,9 +185,9 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to get TEMP PATH");
     }
-    std::string rc_tmp_dir = join({std::string(temp_dir_buffer.data()), std::to_string(_getpid())}, "");
-    if(!CreateDirectoryA(rc_tmp_dir.c_str(), NULL)){
-        DWORD err = ::GetLastError();
+    const std::string rc_tmp_dir = join({std::string(temp_dir_buffer.data()), std::to_string(_getpid())}, "");
+    if(!CreateDirectoryA(rc_tmp_dir.c_str(), nullptr)){
+        const DWORD err = ::GetLastError();
         if (err != ERROR_ALREADY_EXISTS) {
             throw std::system_error(static_cast<int>(err),
                                 std::system_category(), "Failed to make directory");
@@ -196,8 +201,8 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         base_res_file_name = "spack-" + base_res_file_name;
     }
 
-    const std::string res_file_name = join({rc_tmp_dir, base_rc_file_name}, "\\");
-    const std::string rc_file_name = join({rc_tmp_dir, base_res_file_name}, "\\");
+    const std::string res_file_name = join({rc_tmp_dir, base_res_file_name}, "\\");
+    const std::string rc_file_name = join({rc_tmp_dir, base_rc_file_name}, "\\");
 
     ExecuteCommand rc_executor("rc",
                                {"/fo" + res_file_name + " " + rc_file_name});
@@ -229,5 +234,22 @@ std::string LdInvocation::createRC(LinkerInvocation& link_run) {
         throw std::system_error(static_cast<int>(::GetLastError()),
                                 std::system_category(), "Failed to remove intermediate rc file");
     }
-    return res_file_name;
+    std::unique_ptr<RCFileManager> res_file_ptr = std::make_unique<RCFileManager>(res_file_name);
+    return res_file_ptr;
+}
+
+
+RCFileManager::RCFileManager(std::string file) {
+    this->rc_file_ = std::move(file);
+}
+
+RCFileManager::~RCFileManager(){
+    if(!DeleteFile2A(this->rc_file_.c_str(), FILE_FLAG_DISALLOW_PATH_REDIRECTS)) {
+        std::cerr << std::system_error(static_cast<int>(::GetLastError()),
+                            std::system_category(), "Failed to remove intermediate rc file").what() << "\n";
+    }
+}
+
+const std::string& RCFileManager::getRC() {
+    return this->rc_file_;
 }
