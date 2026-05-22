@@ -22,11 +22,11 @@ enum { MaxProcessCommandLength = 32767 };
  */
 LinkerInvocation::LinkerInvocation(std::string linkLine)
     : line_(std::move(linkLine)), is_exe_(true) {
-    StrList const tokenized_line = split(this->line_, " ");
-    this->tokens_ = tokenized_line;
+    this->tokens_ = split(this->line_, " ");
 }
 
-LinkerInvocation::LinkerInvocation(const StrList& linkLine) {
+LinkerInvocation::LinkerInvocation(const StrList& linkLine)
+    : is_exe_(true) {
     this->tokens_ = linkLine;
     this->line_ = join(linkLine);
 }
@@ -46,12 +46,15 @@ void LinkerInvocation::ProcessTokens(const std::string &normal_token, const std:
         // and : is not a legal character in a name_
         // guarantees this split command produces a vec of
         // len 2
-        StrList implib_line = split(token, ":");
-        this->implibname_ = implib_line[1];
+        StrList const implib_line = split(token, ":");
+        if (implib_line.size() >= 2)
+            this->implibname_ = implib_line[1];
     } else if (normal_token == "dll") {
         this->is_exe_ = false;
     } else if (startswith(normal_token, "out")) {
-        this->output_ = split(token, ":")[1];
+        StrList const out_parts = split(token, ":");
+        if (out_parts.size() >= 2)
+            this->output_ = out_parts[1];
     } else if (endswith(normal_token, ".obj") ||
                 endswith(normal_token, ".lib") ||
                 endswith(normal_token, ".lo")) {
@@ -73,7 +76,11 @@ void LinkerInvocation::ProcessTokens(const std::string &normal_token, const std:
         this->rc_files_.push_back(token);
         this->input_files_.push_back(token);
     } else if (startswith(normal_token, "def")) {
-        this->def_file_ = strip(split(token, ":", 1)[1], "\"");
+        {
+            StrList const def_parts = split(token, ":", 1);
+            if (def_parts.size() >= 2)
+                this->def_file_ = strip(def_parts[1], "\"");
+        }
     } else if (this->piped_args_.find(normal_token) !=
                 this->piped_args_.end()) {
         this->piped_args_.at(normal_token).emplace_back(token);
@@ -117,6 +124,9 @@ void LinkerInvocation::Parse() {
     this->processDefFile();
     std::string const ext = this->is_exe_ ? ".exe" : ".dll";
     if (this->output_.empty()) {
+        if (this->input_files_.empty()) {
+            throw FileIOError("No input files and no /OUT specified");
+        }
         // with no "out" argument, the linker
         // will place the file in the CWD
         std::string const name_component = this->input_files_.front();
@@ -159,7 +169,7 @@ void LinkerInvocation::processRSPFile(std::string const& rsp_file) {
         std::string normal_token;
         while(rsp_line >> input_token) {
             normal_token = input_token;
-            if (input_token.front() == '"') {
+            if (!input_token.empty() && input_token.front() == '"') {
                 normal_token = handleQuotedStrings(rsp_line, input_token);
             }
             normalArg(normal_token);
@@ -177,8 +187,8 @@ void LinkerInvocation::processRSPFile(std::string const& rsp_file) {
  * input file for the lib tool
  */
 bool LinkerInvocation::makeRsp() {
-    int const total_length = std::accumulate(
-        this->input_files_.begin(), this->input_files_.end(), 0,
+    size_t const total_length = std::accumulate(
+        this->input_files_.begin(), this->input_files_.end(), size_t(0),
         [](size_t sum, const std::string& s) { return sum + s.size(); });
     if (total_length > MaxProcessCommandLength) {
         std::string const rsp_name = "spack-build.rsp";

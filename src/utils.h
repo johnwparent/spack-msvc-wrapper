@@ -308,6 +308,15 @@ class PathRelocator {
     std::string getRelocation(std::string const& pe);
 };
 
+// Custom deleter for Win32 HANDLE values via CloseHandle.
+struct HandleDeleter {
+    void operator()(HANDLE h) const {
+        if (h && h != INVALID_HANDLE_VALUE)
+            ::CloseHandle(h);
+    }
+};
+using UniqueHandle = std::unique_ptr<void, HandleDeleter>;
+
 using ScopedLocalInfo = std::unique_ptr<void, LocalFreeDeleter>;
 
 using ScopedSid = std::unique_ptr<void, FreeDeleter>;

@@ -436,15 +436,12 @@ std::string basename(const std::string& file) {
 }
 
 std::string GetCWD() {
-    DWORD buf_size;
-    buf_size = GetCurrentDirectoryW(0, nullptr);
-    auto* w_cwd = new wchar_t[buf_size];
-    GetCurrentDirectoryW(buf_size, w_cwd);
-    std::wstring const ws_cwd(w_cwd);
-    free(w_cwd);
+    DWORD const buf_size = GetCurrentDirectoryW(0, nullptr);
+    std::vector<wchar_t> w_cwd(buf_size);
+    GetCurrentDirectoryW(buf_size, w_cwd.data());
+    std::wstring const ws_cwd(w_cwd.data());
     try {
-        std::string s_cwd = ConvertWideToASCII(ws_cwd);
-        return s_cwd;
+        return ConvertWideToASCII(ws_cwd);
     } catch (const std::overflow_error& e) {
         std::cerr << e.what() << "\n";
         return std::string();
@@ -728,22 +725,16 @@ std::string EnsureValidLengthPath(const std::string& path) {
  * \param name the string to be mangled
  */
 std::string mangle_name(const std::string& name) {
-    std::string abs_out;
-    std::string mangled_abs_out;
-    abs_out = MakePathAbsolute(name);
+    std::string abs_out = MakePathAbsolute(name);
     abs_out = CanonicalizePath(abs_out);
-    // Now that we have the full path, check size
     abs_out = EnsureValidLengthPath(abs_out);
-    char* chr_abs_out = new char[abs_out.length() + 1];
-    strcpy(chr_abs_out, abs_out.c_str());
-    replace_path_characters(chr_abs_out, abs_out.length());
-    char const* padded_path =
-        pad_path(chr_abs_out, static_cast<DWORD>(abs_out.length()));
-    mangled_abs_out = std::string(padded_path, MAX_NAME_LEN);
-
-    delete[] chr_abs_out;
-    delete padded_path;
-    return mangled_abs_out;
+    replace_path_characters(&abs_out[0], abs_out.length());
+    std::unique_ptr<char[]> padded_path(
+        pad_path(abs_out.c_str(), static_cast<DWORD>(abs_out.length())));
+    if (!padded_path) {
+        throw NameTooLongError("Name too long to pad");
+    }
+    return std::string(padded_path.get(), MAX_NAME_LEN);
 }
 
 bool fileExists(const std::string& fname) {

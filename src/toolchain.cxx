@@ -21,7 +21,7 @@ ToolChainInvocation::ToolChainInvocation(std::string command,
 
 void ToolChainInvocation::InterpolateSpackEnv(SpackEnvState& spackenv) {
     // inject Spack includes before the default includes
-    for (auto& include : spackenv.SpackIncludeDirs) {
+    for (const auto& include : spackenv.SpackIncludeDirs) {
         auto inc_arg = ToolChainInvocation::ComposeIncludeArg(include);
         this->inputs.push_back(inc_arg);
     }
@@ -57,16 +57,16 @@ void ToolChainInvocation::ParseCommandArgs(char const* const* cli) {
     }
 }
 
-std::string ToolChainInvocation::ComposeIncludeArg(std::string& include) {
+std::string ToolChainInvocation::ComposeIncludeArg(const std::string& include) {
     return "/external:I " + include;
 }
 
-std::string ToolChainInvocation::ComposeLibPathArg(std::string& libPath) {
+std::string ToolChainInvocation::ComposeLibPathArg(const std::string& libPath) {
     return "/LIBPATH:" + libPath;
 }
 
-void ToolChainInvocation::AddExtraLibPaths(StrList paths) {
-    for (auto& lib_dir : paths) {
+void ToolChainInvocation::AddExtraLibPaths(const StrList& paths) {
+    for (const auto& lib_dir : paths) {
         this->inputs.push_back(ToolChainInvocation::ComposeLibPathArg(lib_dir));
     }
 }
@@ -74,7 +74,8 @@ void ToolChainInvocation::AddExtraLibPaths(StrList paths) {
 StrList ToolChainInvocation::ComposeCommandLists(
     const std::vector<StrList>& command_args) {
     StrList command_line;
-    for (auto arg_list : command_args) {
+    for (const auto& arg_list_ref : command_args) {
+        StrList arg_list = arg_list_ref;
         // Ensure arguments are appropriately quoted
         quoteList(arg_list);
         command_line.insert(command_line.end(), arg_list.begin(),

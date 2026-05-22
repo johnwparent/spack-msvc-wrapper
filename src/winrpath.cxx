@@ -71,16 +71,16 @@ bool LibRename::RenameDll(char* name_loc, const std::string& dll_path) {
         return false;
     }
 
-    char* new_lib_pth =
-        pad_path(new_loc.c_str(), static_cast<DWORD>(new_loc.size()));
+    std::unique_ptr<char[]> new_lib_pth(
+        pad_path(new_loc.c_str(), static_cast<DWORD>(new_loc.size())));
     if (!new_lib_pth) {
         return false;
     }
-    replace_special_characters(new_lib_pth, MAX_NAME_LEN);
+    replace_special_characters(new_lib_pth.get(), MAX_NAME_LEN);
 
     // c_str returns a proper (i.e. null terminated) value, so we dont need to worry about
     // size differences w.r.t the path to the new library
-    snprintf(name_loc, MAX_NAME_LEN + 1, "%s", new_lib_pth);
+    snprintf(name_loc, MAX_NAME_LEN + 1, "%s", new_lib_pth.get());
     return true;
 }
 
@@ -106,34 +106,42 @@ bool LibRename::RenameDll(char* name_loc, const std::string& dll_path) {
  * 
 */
 bool LibRename::FindDllAndRename(HANDLE& pe_in) {
-    HANDLE h_map_object =
-        CreateFileMapping(pe_in, nullptr, PAGE_READWRITE, 0, 0, nullptr);
+    UniqueHandle h_map_object(
+        CreateFileMapping(pe_in, nullptr, PAGE_READWRITE, 0, 0, nullptr));
     if (!h_map_object) {
         std::cerr << "Unable to create mapping object: " << reportLastError()
                   << "\n";
         return false;
     }
-    LPVOID basepointer = static_cast<char*>(
-        MapViewOfFile(h_map_object, FILE_MAP_WRITE, 0, 0, 0));
+    struct ViewDeleter {
+        void operator()(void* p) const {
+            if (p) {
+                FlushViewOfFile((LPCVOID)p, 0);
+                UnmapViewOfFile((LPCVOID)p);
+            }
+        }
+    };
+    std::unique_ptr<void, ViewDeleter> basepointer(
+        MapViewOfFile(h_map_object.get(), FILE_MAP_WRITE, 0, 0, 0));
     if (!basepointer) {
         std::cerr << "Unable to create file map view\n";
         return false;
     }
     // Establish base PE headers
-    auto* dos_header = static_cast<PIMAGE_DOS_HEADER>(basepointer);
+    auto* dos_header = static_cast<PIMAGE_DOS_HEADER>(basepointer.get());
     auto* nt_header = reinterpret_cast<PIMAGE_NT_HEADERS>(
-        static_cast<char*>(basepointer) + dos_header->e_lfanew);
+        static_cast<char*>(basepointer.get()) + dos_header->e_lfanew);
 
     auto* coff_header = reinterpret_cast<PIMAGE_FILE_HEADER>(
-        static_cast<char*>(basepointer) + dos_header->e_lfanew +
+        static_cast<char*>(basepointer.get()) + dos_header->e_lfanew +
         sizeof(nt_header->Signature));
 
     auto* optional_header = reinterpret_cast<PIMAGE_OPTIONAL_HEADER>(
-        static_cast<char*>(basepointer) + dos_header->e_lfanew +
+        static_cast<char*>(basepointer.get()) + dos_header->e_lfanew +
         sizeof(nt_header->Signature) + sizeof(nt_header->FileHeader));
 
     auto* section_header = reinterpret_cast<PIMAGE_SECTION_HEADER>(
-        static_cast<char*>(basepointer) + dos_header->e_lfanew +
+        static_cast<char*>(basepointer.get()) + dos_header->e_lfanew +
         sizeof(nt_header->Signature) + sizeof(nt_header->FileHeader) +
         sizeof(nt_header->OptionalHeader));
 
@@ -158,7 +166,7 @@ bool LibRename::FindDllAndRename(HANDLE& pe_in) {
     DWORD const import_section_file_offset = RvaToFileOffset(
         section_header, number_of_sections, rva_import_directory);
     char* import_table_offset =
-        static_cast<char*>(basepointer) + import_section_file_offset;
+        static_cast<char*>(basepointer.get()) + import_section_file_offset;
     auto* import_image_descriptor =
         reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(import_table_offset);
     //DLL Imports
@@ -175,10 +183,8 @@ bool LibRename::FindDllAndRename(HANDLE& pe_in) {
             }
         }
     }
-    FlushViewOfFile((LPCVOID)basepointer, 0);
-    UnmapViewOfFile((LPCVOID)basepointer);
-
-    return SafeHandleCleanup(h_map_object) != 0;
+    // RAII handles flush, unmap (basepointer), and CloseHandle (h_map_object)
+    return true;
 }
 
 /*
@@ -261,28 +267,26 @@ bool LibRename::ComputeDefFile() {
     // You might want to get the DLL name dynamically from the input filename or dumpbin output
     output_file << "EXPORTS\n";
 
+    static std::regex const re_ordinal(R"(ordinal\s+name)");
+    static std::regex const re_symbol(R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)");
+
     std::string line;
     // Read until the output column titles
     while (std::getline(input_file, line)) {
-        std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
-        if (!search_res.empty()) break;
-        std::string const res = search_res.str();
-        if (!res.empty()) {
-            break;
-        }
+        std::smatch search_res;
+        if (std::regex_search(line, search_res, re_ordinal)) break;
     }
     while (std::getline(input_file, line)) {
         if (line.empty()) {
             continue;
         }
-        if (line.find("Summary") !=
-            std::string::
-                npos) {  // Skip header in export block if still present
+        if (line.find("Summary") != std::string::npos) {
             break;
         }
-        output_file << "    "
-                    << regexMatch(line, R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)").str(1)
-                    << '\n';
+        std::smatch sym_match;
+        if (std::regex_match(line, sym_match, re_symbol)) {
+            output_file << "    " << sym_match.str(1) << '\n';
+        }
     }
     input_file.close();
     output_file.close();

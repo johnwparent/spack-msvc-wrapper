@@ -234,10 +234,12 @@ std::unique_ptr<RCFileManager> LdInvocation::createRC(LinkerInvocation& link_run
     }
     std::string abs_out = EnsureValidLengthPath(
         CanonicalizePath(MakePathAbsolute(pe_stage_name)));
-    std::string padded(pad_path(abs_out.c_str(), static_cast<DWORD>(abs_out.length()), '\\', MAX_NAME_LEN), MAX_NAME_LEN);
-    if (padded.empty()) {
+    std::unique_ptr<char[]> padded_raw(
+        pad_path(abs_out.c_str(), static_cast<DWORD>(abs_out.length()), '\\', MAX_NAME_LEN));
+    if (!padded_raw) {
         throw RCCompilerFailure("Could not pad path for RC file");
     }
+    std::string padded(padded_raw.get(), MAX_NAME_LEN);
     std::string escaped = escape_backslash(padded);
     rc_out << template_base << "    " << '"' << escaped << '"' << "\n"
            << template_end;

@@ -18,8 +18,6 @@
 
 #define BUFSIZE 4096
 
-const std::string empty = std::string();
-
 /**
  * @brief
  */
@@ -31,7 +29,7 @@ class ExecuteCommand {
     ExecuteCommand() = default;
     ExecuteCommand& operator=(ExecuteCommand&& execute_command) noexcept;
     ~ExecuteCommand();
-    bool Execute(const std::string& filename = empty);
+    bool Execute(const std::string& filename = {});
     DWORD Join();
 
    private:
@@ -39,7 +37,6 @@ class ExecuteCommand {
     bool ExecuteToolChainChild();
     int PipeChildToStdStream(DWORD STD_HANDLE, HANDLE reader_handle);
     int CreateChildPipes();
-    int CleanupHandles();
     DWORD ReportExitCode();
     // Holds the exit code of the
     // pipe from child process stdout
@@ -52,17 +49,16 @@ class ExecuteCommand {
     // command wrapped by this class
     std::future<DWORD> exit_code_future;
     std::string ComposeCLI();
-    HANDLE ChildStdOut_Rd;
-    HANDLE ChildStdOut_Wd;
-    HANDLE ChildStdErr_Rd;
-    HANDLE ChildStdErr_Wd;
+    UniqueHandle ChildStdOut_Rd;
+    UniqueHandle ChildStdOut_Wd;
+    UniqueHandle ChildStdErr_Rd;
+    UniqueHandle ChildStdErr_Wd;
     PROCESS_INFORMATION procInfo;
     STARTUPINFOW startInfo;
     SECURITY_ATTRIBUTES saAttr;
     SECURITY_ATTRIBUTES saAttrErr;
-    HANDLE fileout = INVALID_HANDLE_VALUE;
+    UniqueHandle fileout;
     bool write_to_file = false;
-    bool cpw_initalization_failure = false;
     bool terminated = false;
     std::string base_command;
     StrList command_args;

@@ -33,13 +33,11 @@ using long_import_member = struct long_import_member {
     char* string_table;
 
     ~long_import_member() {
-        for (int i = 0; i < this->pfile_h->NumberOfSections; ++i) {
-            delete *(this->section_data + i);
-        }
-        delete this->symbol_table;
-        delete this->section_data;
-        delete this->pp_sections;
-        delete this->string_table;
+        // section_data elements point into member->data (not independent allocs)
+        delete[] this->section_data;
+        delete[] this->symbol_table;
+        delete[] this->pp_sections;
+        // string_table points into member->data; do not delete it
     }
 };
 
@@ -98,7 +96,7 @@ using coff_member = struct coff_member {
         delete long_member;
         delete first_link;
         delete second_link;
-        delete data;
+        delete[] data;
     }
 };
 

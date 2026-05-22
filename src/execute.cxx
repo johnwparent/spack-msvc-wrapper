@@ -29,21 +29,13 @@
 enum : std::uint16_t { InvalidExitCode = 999 };
 
 ExecuteCommand::ExecuteCommand(std::string command)
-    : ChildStdOut_Rd(nullptr),
-      ChildStdOut_Wd(nullptr),
-      ChildStdErr_Rd(nullptr),
-      ChildStdErr_Wd(nullptr),
-      base_command(std::move(command)) {
+    : base_command(std::move(command)) {
     this->CreateChildPipes();
     this->SetupExecute();
 }
 
 ExecuteCommand::ExecuteCommand(std::string arg, const StrList& args)
-    : ChildStdOut_Rd(nullptr),
-      ChildStdOut_Wd(nullptr),
-      ChildStdErr_Rd(nullptr),
-      ChildStdErr_Wd(nullptr),
-      base_command(std::move(arg)) {
+    : base_command(std::move(arg)) {
     for (const auto& argp : args) {
         this->command_args.push_back(argp);
     }
@@ -66,12 +58,17 @@ ExecuteCommand& ExecuteCommand::operator=(
     this->command_args = std::move(execute_command.command_args);
     this->child_out_future = std::move(execute_command.child_out_future);
     this->child_err_future = std::move(execute_command.child_err_future);
-    this->exit_code_future = std::move(exit_code_future);
+    this->exit_code_future = std::move(execute_command.exit_code_future);
+    this->saAttrErr = std::move(execute_command.saAttrErr);
     return *this;
 }
 
 ExecuteCommand::~ExecuteCommand() {
-    this->CleanupHandles();
+    // UniqueHandle members (pipe handles, fileout) clean up automatically.
+    // procInfo handles are raw — ReportExitCode already closes hProcess,
+    // so SafeHandleCleanup is a no-op for it after a successful Join.
+    SafeHandleCleanup(this->procInfo.hProcess);
+    SafeHandleCleanup(this->procInfo.hThread);
 }
 
 void ExecuteCommand::SetupExecute() {
@@ -107,8 +104,13 @@ int ExecuteCommand::CreateChildPipes() {
     sa_attr.bInheritHandle = FALSE;
     sa_attr.lpSecurityDescriptor = nullptr;
     this->saAttr = sa_attr;
-    if (!CreatePipe(&this->ChildStdOut_Rd, &this->ChildStdOut_Wd, &sa_attr, 0))
+
+    HANDLE rd = nullptr;
+    HANDLE wd = nullptr;
+    if (!CreatePipe(&rd, &wd, &sa_attr, 0))
         return 0;
+    this->ChildStdOut_Rd.reset(rd);
+    this->ChildStdOut_Wd.reset(wd);
 
     // create stderr pipes
     SECURITY_ATTRIBUTES sa_attr_err;
@@ -116,9 +118,16 @@ int ExecuteCommand::CreateChildPipes() {
     sa_attr_err.bInheritHandle = FALSE;
     sa_attr_err.lpSecurityDescriptor = nullptr;
     this->saAttrErr = sa_attr_err;
-    if (!CreatePipe(&this->ChildStdErr_Rd, &this->ChildStdErr_Wd, &sa_attr_err,
-                    0))
+
+    HANDLE err_rd = nullptr;
+    HANDLE err_wd = nullptr;
+    if (!CreatePipe(&err_rd, &err_wd, &sa_attr_err, 0)) {
+        this->ChildStdOut_Rd.reset();
+        this->ChildStdOut_Wd.reset();
         return 0;
+    }
+    this->ChildStdErr_Rd.reset(err_rd);
+    this->ChildStdErr_Wd.reset(err_wd);
 
     return 1;
 }
@@ -146,17 +155,17 @@ bool ExecuteCommand::ExecuteToolChainChild() {
     HANDLE inheritableOut = INVALID_HANDLE_VALUE;
     HANDLE inheritableErr = INVALID_HANDLE_VALUE;
     HANDLE const self = GetCurrentProcess();
-    if (this->ChildStdOut_Wd && this->ChildStdOut_Wd != INVALID_HANDLE_VALUE) {
-        if (!DuplicateHandle(self, this->ChildStdOut_Wd, self, &inheritableOut,
-                             0, TRUE, DUPLICATE_SAME_ACCESS)) {
+    if (this->ChildStdOut_Wd) {
+        if (!DuplicateHandle(self, this->ChildStdOut_Wd.get(), self,
+                             &inheritableOut, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
             return false;
         }
         this->startInfo.hStdOutput = inheritableOut;
         this->startInfo.dwFlags |= STARTF_USESTDHANDLES;
     }
-    if (this->ChildStdErr_Wd && this->ChildStdErr_Wd != INVALID_HANDLE_VALUE) {
-        if (!DuplicateHandle(self, this->ChildStdErr_Wd, self, &inheritableErr,
-                             0, TRUE, DUPLICATE_SAME_ACCESS)) {
+    if (this->ChildStdErr_Wd) {
+        if (!DuplicateHandle(self, this->ChildStdErr_Wd.get(), self,
+                             &inheritableErr, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
             // Clean up any previously duplicated handle
             if (inheritableOut && inheritableOut != INVALID_HANDLE_VALUE)
                 CloseHandle(inheritableOut);
@@ -193,7 +202,6 @@ bool ExecuteCommand::ExecuteToolChainChild() {
         } else {
             std::cerr << reportLastError() << "\n";
         }
-        this->cpw_initalization_failure = true;
         return false;
     }
     // We've suceeded in kicking off the toolchain run
@@ -207,21 +215,14 @@ bool ExecuteCommand::ExecuteToolChainChild() {
         CloseHandle(this->startInfo.hStdError);
         this->startInfo.hStdError = INVALID_HANDLE_VALUE;
     }
-    // Also ensure our member copies of the write handles are closed in the
-    // parent; they reference the same kernel objects as the STARTUPINFO
-    // entries above.
-    if (this->ChildStdOut_Wd && this->ChildStdOut_Wd != INVALID_HANDLE_VALUE) {
-        SafeHandleCleanup(this->ChildStdOut_Wd);
-        this->ChildStdOut_Wd = INVALID_HANDLE_VALUE;
-    }
-    if (this->ChildStdErr_Wd && this->ChildStdErr_Wd != INVALID_HANDLE_VALUE) {
-        SafeHandleCleanup(this->ChildStdErr_Wd);
-        this->ChildStdErr_Wd = INVALID_HANDLE_VALUE;
-    }
+    // Close write ends in parent — child has inherited its own copies via the
+    // duplicated inheritable handles above.
+    this->ChildStdOut_Wd.reset();
+    this->ChildStdErr_Wd.reset();
     return true;
 }
 
-/* 
+/*
  * Reads for the member variable holding a pipe to the wrapped processes'
  * STD_HANDLE (stdour or stderr) and writes either to this processes'
  * STD_HANDLE or a file, depending on how the process wrapper is configured
@@ -233,8 +234,8 @@ int ExecuteCommand::PipeChildToStdStream(DWORD STD_HANDLE,
     std::vector<char> ch_buf(BUFSIZE);
     BOOL b_success = TRUE;
     HANDLE h_parent_out;
-    if (this->write_to_file && this->fileout != INVALID_HANDLE_VALUE) {
-        h_parent_out = this->fileout;
+    if (this->write_to_file && this->fileout) {
+        h_parent_out = this->fileout.get();
     } else {
         h_parent_out = GetStdHandle(STD_HANDLE);
     }
@@ -274,35 +275,12 @@ int ExecuteCommand::PipeChildToStdStream(DWORD STD_HANDLE,
     // release underlying kernel resources. This prevents leaking handles
     // across many invocations which can cause pipes to never reach EOF and
     // eventually exhaust kernel resources.
+    // Ownership was transferred here via .release() in Execute(), so we close
+    // the raw handle directly.
     if (reader_handle && reader_handle != INVALID_HANDLE_VALUE) {
         CloseHandle(reader_handle);
-        // Clear the member copy so CleanupHandles doesn't attempt to close the
-        // same handle again.
-        if (reader_handle == this->ChildStdOut_Rd) {
-            this->ChildStdOut_Rd = INVALID_HANDLE_VALUE;
-        } else if (reader_handle == this->ChildStdErr_Rd) {
-            this->ChildStdErr_Rd = INVALID_HANDLE_VALUE;
-        }
     }
     return static_cast<int>(static_cast<int>(b_success) == 0);
-}
-
-/*
- * Ensures handles and their underlying resources are
- * cleaned
- */
-int ExecuteCommand::CleanupHandles() {
-    if (!this->cpw_initalization_failure) {
-        if (this->fileout != INVALID_HANDLE_VALUE)
-            if (!SafeHandleCleanup(this->fileout))
-                return 0;
-        if (!SafeHandleCleanup(this->procInfo.hProcess))
-            return 0;
-        if (!SafeHandleCleanup(this->procInfo.hThread))
-            return 0;
-        return 1;
-    }
-    return 0;
 }
 
 /**
@@ -310,14 +288,12 @@ int ExecuteCommand::CleanupHandles() {
  * on the status of wrapped process which is performed asynchronously
  */
 DWORD ExecuteCommand::ReportExitCode() {
-    DWORD exit_code;
-    while (GetExitCodeProcess(this->procInfo.hProcess, &exit_code)) {
-        if (exit_code != STILL_ACTIVE)
-            break;
-    }
+    WaitForSingleObject(this->procInfo.hProcess, INFINITE);
+    DWORD exit_code = InvalidExitCode;
+    GetExitCodeProcess(this->procInfo.hProcess, &exit_code);
     this->terminated = true;
-    // Use SafeHandleCleanup to close the process handle and mark it invalid
-    // so later cleanup paths do not attempt to close it again.
+    // Close the process handle and mark it invalid so the destructor doesn't
+    // attempt to close it again.
     SafeHandleCleanup(this->procInfo.hProcess);
     return exit_code;
 }
@@ -345,13 +321,14 @@ bool ExecuteCommand::Execute(const std::string& filename) {
     if (!filename.empty()) {
         this->write_to_file = true;
         try {
-            this->fileout = CreateFileW(
+            HANDLE const h_fileout = CreateFileW(
                 ConvertASCIIToWide(filename).c_str(), FILE_APPEND_DATA,
                 FILE_SHARE_WRITE | FILE_SHARE_READ, &this->saAttr, OPEN_ALWAYS,
                 FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (this->fileout != INVALID_HANDLE_VALUE) {
+            if (h_fileout != INVALID_HANDLE_VALUE) {
+                this->fileout.reset(h_fileout);
                 // Ensure file handle is not inheritable by child processes
-                SetHandleInformation(this->fileout, HANDLE_FLAG_INHERIT, 0);
+                SetHandleInformation(this->fileout.get(), HANDLE_FLAG_INHERIT, 0);
             }
         } catch (const std::overflow_error& e) {
             std::cerr << e.what() << "\n";
@@ -362,12 +339,13 @@ bool ExecuteCommand::Execute(const std::string& filename) {
     // drain the pipe as soon as the child writes. This reduces a small race
     // window where a very fast child can fill the pipe buffer before the
     // parent starts reading.
+    // Transfer ownership of reader handles to the async threads via .release().
     this->child_out_future = std::async(
         std::launch::async, &ExecuteCommand::PipeChildToStdStream, this,
-        STD_OUTPUT_HANDLE, this->ChildStdOut_Rd);
+        STD_OUTPUT_HANDLE, this->ChildStdOut_Rd.release());
     this->child_err_future = std::async(
         std::launch::async, &ExecuteCommand::PipeChildToStdStream, this,
-        STD_ERROR_HANDLE, this->ChildStdErr_Rd);
+        STD_ERROR_HANDLE, this->ChildStdErr_Rd.release());
 
     bool const ret_code = this->ExecuteToolChainChild();
     if (ret_code) {
