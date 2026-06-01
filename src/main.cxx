@@ -21,7 +21,8 @@
 int main(int argc, const char* argv[]) {
     const bool is_relocate = IsRelocate(argv[0]);
     const bool is_report = IsReport(argv[0]);
-    if ((is_relocate || is_report) && CheckAndPrintHelp(argv, argc)) {
+    const bool no_args = argc < 2;
+    if (CheckAndPrintHelp(argv, no_args, is_report, is_relocate)) {
         return 0;
     }
     if (is_relocate) {

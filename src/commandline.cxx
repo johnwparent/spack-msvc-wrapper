@@ -178,11 +178,11 @@ std::map<std::string, std::string> ParseReport(int argc, const char** args) {
     return opts;
 }
 
-bool CheckAndPrintHelp(const char** arg, int argc) {
-    if (argc < 2) {
+bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_report, bool is_relocate) {
+    if (no_args && (is_relocate || is_report)) {
         return print_help();
     }
-    if (strcmp(arg[1], "--help") == 0 || strcmp(arg[1], "-h") == 0) {
+    if (!no_args && (strcmp(arg[1], "--help") == 0 || strcmp(arg[1], "-h") == 0)) {
         return print_help();
     }
     return false;
