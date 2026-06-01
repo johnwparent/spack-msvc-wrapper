@@ -19,11 +19,12 @@
 #include <Intsafe.h>
 
 int main(int argc, const char* argv[]) {
-
-    if (CheckAndPrintHelp(argv, argc)) {
+    const bool is_relocate = IsRelocate(argv[0]);
+    const bool is_report = IsReport(argv[0]);
+    if ((is_relocate || is_report) && CheckAndPrintHelp(argv, argc)) {
         return 0;
     }
-    if (IsRelocate(argv[0])) {
+    if (is_relocate) {
         std::map<std::string, std::string> patch_args =
             ParseRelocate(argv + 1, argc - 1);
         if (patch_args.empty()) {
@@ -90,7 +91,7 @@ int main(int argc, const char* argv[]) {
             std::cerr << "Library rename failed\n";
             return ExitConditions::RENAME_FAILURE;
         }
-    } else if (IsReport(argv[0])) {
+    } else if (is_report) {
         std::map<std::string, std::string> report_args =
             ParseReport(argc - 1, argv + 1);
         if (report_args.empty()) {

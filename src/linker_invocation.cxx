@@ -78,6 +78,9 @@ void LinkerInvocation::ProcessTokens(const std::string &normal_token, const std:
                 this->piped_args_.end()) {
         this->piped_args_.at(normal_token).emplace_back(token);
     }   
+    else if (normal_token == "?") {
+        this->is_help_ = true;
+    }
 }
 
 
@@ -113,7 +116,9 @@ void LinkerInvocation::Parse() {
     // /NAME
     // if no /NAME
     // first input file (post rc expansion)
-
+    if (this->is_help_ || this->input_files_.empty()) {
+        return;
+    }
     this->processDefFile();
     std::string const ext = this->is_exe_ ? ".exe" : ".dll";
     if (this->output_.empty()) {
@@ -317,4 +322,8 @@ std::string LinkerInvocation::get_mangled_out() const {
 
 bool LinkerInvocation::IsExeLink() const {
     return this->is_exe_ || endswith(this->get_out(), ".exe");
+}
+
+bool LinkerInvocation::isHelp() const {
+    return this->is_help_;
 }
