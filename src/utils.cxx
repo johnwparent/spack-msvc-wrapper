@@ -428,7 +428,7 @@ std::string stem(const std::string& file) {
 }
 
 std::string basename(const std::string& file) {
-    size_t const last_path = file.find_last_of('\\') + 1;
+    size_t const last_path = file.find_last_of("/\\") + 1;
     if (last_path == std::string::npos) {
         return file;
     }
