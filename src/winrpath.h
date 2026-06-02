@@ -38,19 +38,16 @@ class LibRename {
     bool ExecutePERename();
     bool ComputeDefFile();
     std::string ComputeRenameLink();
-    std::string ComputeDefLine();
 
    private:
     static bool FindDllAndRename(HANDLE& pe_in);
     static bool SpackCheckForDll(const std::string& dll_path) ;
     static bool RenameDll(char* name_loc, const std::string& dll_path) ;
-    ExecuteCommand def_executor;
     ExecuteCommand lib_executor;
     std::string pe;
     std::string coff;
     std::string new_lib;
     std::string def_file;
-    std::string tmp_def_file;
     bool full;
     bool replace;
 };

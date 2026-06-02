@@ -43,6 +43,7 @@ class CoffParser {
     bool NormalizeName(std::string& name);
     void Report();
     int Verify();
+    std::vector<std::string> GetExportNames() const;
     std::string GetLongName() const;
     std::string GetShortName() const;
     std::string GetName() const;
