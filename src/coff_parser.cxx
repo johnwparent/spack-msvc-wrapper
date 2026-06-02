@@ -582,9 +582,12 @@ void CoffParser::ReportLongName(const char* data) {
 std::vector<std::string> CoffParser::GetExportNames() const {
     std::vector<std::string> names;
     for (const auto& mem : this->coff_.members) {
-        if (mem.member->is_short && mem.member->short_member->short_name &&
-            mem.member->short_member->short_name[0] != '\0') {
-            names.emplace_back(mem.member->short_member->short_name);
+        if (!mem.member->is_short) continue;
+        const auto* short_mem = mem.member->short_member;
+        if (short_mem->im_h->NameType == IMPORT_OBJECT_ORDINAL) {
+            names.push_back("@" + std::to_string(short_mem->im_h->Ordinal) + " NONAME");
+        } else if (short_mem->short_name && short_mem->short_name[0] != '\0') {
+            names.emplace_back(short_mem->short_name);
         }
     }
     return names;
