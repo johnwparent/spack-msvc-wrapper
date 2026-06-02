@@ -40,8 +40,8 @@ class LinkerInvocation {
     StrList command_files_;
     StrList input_files_;
     StrList tokens_;
-    bool is_exe_;
-    bool is_help_;
+    bool is_exe_ = true;
+    bool is_help_ = false;
     std::map<std::string, StrList> piped_args_ = {
         {"export", {}},    {"include", {}}, {"libpath", {}},
         {"ltcg", {}},      {"machine", {}}, {"nodefaultlib", {}},
