@@ -579,20 +579,6 @@ void CoffParser::ReportLongName(const char* data) {
     std::cout << "DLL: " << data << "\n";
 }
 
-std::vector<std::string> CoffParser::GetExportNames() const {
-    std::vector<std::string> names;
-    for (const auto& mem : this->coff_.members) {
-        if (!mem.member->is_short) continue;
-        const auto* short_mem = mem.member->short_member;
-        if (short_mem->im_h->NameType == IMPORT_OBJECT_ORDINAL) {
-            names.push_back("@" + std::to_string(short_mem->im_h->Ordinal) + " NONAME");
-        } else if (short_mem->short_name && short_mem->short_name[0] != '\0') {
-            names.emplace_back(short_mem->short_name);
-        }
-    }
-    return names;
-}
-
 std::string CoffParser::GetLongName() const {
     // TODO(johnwparent): I think we can access the
     // 2nd index of the members vec to get the long

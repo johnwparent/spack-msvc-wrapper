@@ -17,12 +17,14 @@
 #include "utils.h"
 
 #include <fstream>
+#include <iosfwd>
 #include <iostream>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
+#include <regex>
 
 /*
  * Checks a DLL name for path characters
@@ -236,31 +238,71 @@ LibRename::LibRename(std::string p_exe, std::string coff, bool full,
       coff(std::move(coff)) {
     this->pe = MakePathAbsolute(this->pe);
     std::string const coff_path = stem(this->coff);
+    this->tmp_def_file = coff_path + "-tmp.def";
     this->def_file = coff_path + ".def";
+    this->def_executor =
+        ExecuteCommand("dumpbin.exe", {this->ComputeDefLine()});
     this->lib_executor = ExecuteCommand("lib.exe", {this->ComputeRenameLink()});
 }
 
 /**
- * Produces a `.def` file describing the exports of the import library by
- * parsing the COFF archive directly, without invoking dumpbin.exe.
+ * Creates the line to be provided to dumpbin.exe to produce the exports of a given
+ * dll in the case where we do not have access to the original link line
+ *
+ * Produces something like `/EXPORTS <name of coff file>`
+ */
+std::string LibRename::ComputeDefLine() {
+    return "/NOLOGO /EXPORTS \"" + this->coff + "\"";
+}
+
+/**
+ * Drives the process of running dumpbin.exe on a PE file to determine its exports
+ * and produce a `.def` file
+ *
+ * Returns the return code of the Def file computation operation
  */
 bool LibRename::ComputeDefFile() {
-    CoffReaderWriter coff_reader(this->coff);
-    CoffParser coff_parser(&coff_reader);
-    if (!coff_parser.Parse()) {
-        std::cerr << "Error: Could not parse import library " << this->coff << "\n";
+    this->def_executor.Execute(this->tmp_def_file);
+    DWORD const def_res = this->def_executor.Join();
+    if (def_res) {
+        return false;
+    }
+    std::ifstream input_file(this->tmp_def_file);
+    if (!input_file.is_open()) {
+        std::cerr << "Error: Could not open input file " << tmp_def_file
+                  << '\n';
         return false;
     }
     std::ofstream output_file(this->def_file);
     if (!output_file.is_open()) {
-        std::cerr << "Error: Could not open output file " << this->def_file << "\n";
+        std::cerr << "Error: Could not open output file " << this->def_file
+                  << '\n';
         return false;
     }
     output_file << "EXPORTS\n";
-    for (const auto& name : coff_parser.GetExportNames()) {
-        output_file << "    " << name << "\n";
+    std::string line;
+    while (std::getline(input_file, line)) {
+        std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
+        if (!search_res.empty()) break;
+        std::string const res = search_res.str();
+        if (!res.empty()) {
+            break;
+        }
     }
+    while (std::getline(input_file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        if (line.find("Summary") != std::string::npos) {
+            break;
+        }
+        output_file << "    "
+                    << regexMatch(line, R"(^.*?(\S+)(?:\s+\(.*\))?\s*$)").str(1)
+                    << '\n';
+    }
+    input_file.close();
     output_file.close();
+    std::remove(this->tmp_def_file.c_str());
     return true;
 }
 
