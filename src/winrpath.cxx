@@ -282,12 +282,7 @@ bool LibRename::ComputeDefFile() {
     output_file << "EXPORTS\n";
     std::string line;
     while (std::getline(input_file, line)) {
-        std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
-        if (!search_res.empty()) break;
-        std::string const res = search_res.str();
-        if (!res.empty()) {
-            break;
-        }
+        if (!regexSearch(line, R"(ordinal\s+(?:hint\s+RVA\s+)?name)").empty()) break;
     }
     while (std::getline(input_file, line)) {
         if (line.empty()) {
