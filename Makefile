@@ -64,7 +64,7 @@ cl.exe :  $(SRCS)
 	link $(LFLAGS) $** $(API_LIBS) /out:cl.exe
 
 install : cl.exe
-	@if not exist "$(PREFIX)" mkdir "$(PREFIX)""
+	@if not exist "$(PREFIX)" mkdir "$(PREFIX)"
 	@if not exist "$(PREFIX)\cl.exe" move cl.exe "$(PREFIX)"
 	@if not exist "$(PREFIX)\link.exe" mklink "$(PREFIX)\link.exe" "$(PREFIX)\cl.exe"
 	@if not exist "$(PREFIX)\ifx.exe" mklink "$(PREFIX)\ifx.exe" "$(PREFIX)\cl.exe"
