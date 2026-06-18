@@ -248,7 +248,7 @@ LibRename::LibRename(std::string p_exe, std::string coff, bool full,
 /**
  * Creates the line to be provided to dumpbin.exe to produce the exports of a given
  * dll in the case where we do not have access to the original link line
- * 
+ *
  * Produces something like `/EXPORTS <name of coff file>`
  */
 std::string LibRename::ComputeDefLine() {
@@ -258,7 +258,7 @@ std::string LibRename::ComputeDefLine() {
 /**
  * Drives the process of running dumpbin.exe on a PE file to determine its exports
  * and produce a `.def` file
- * 
+ *
  * Returns the return code of the Def file computation operation
  */
 bool LibRename::ComputeDefFile() {
@@ -267,44 +267,28 @@ bool LibRename::ComputeDefFile() {
     if (def_res) {
         return false;
     }
-    // Need to process the produced def file because it's wrong
-    // Open input file
     std::ifstream input_file(this->tmp_def_file);
     if (!input_file.is_open()) {
         std::cerr << "Error: Could not open input file " << tmp_def_file
                   << '\n';
         return false;
     }
-
-    // Open output file
     std::ofstream output_file(this->def_file);
     if (!output_file.is_open()) {
         std::cerr << "Error: Could not open output file " << this->def_file
                   << '\n';
         return false;
     }
-
-    // Write the standard .def file header
-    // You might want to get the DLL name dynamically from the input filename or dumpbin output
     output_file << "EXPORTS\n";
-
     std::string line;
-    // Read until the output column titles
     while (std::getline(input_file, line)) {
-        std::smatch search_res = regexSearch(line, R"(ordinal\s+name)");
-        if (!search_res.empty()) break;
-        std::string const res = search_res.str();
-        if (!res.empty()) {
-            break;
-        }
+        if (!regexSearch(line, R"(ordinal\s+(?:hint\s+RVA\s+)?name)").empty()) break;
     }
     while (std::getline(input_file, line)) {
         if (line.empty()) {
             continue;
         }
-        if (line.find("Summary") !=
-            std::string::
-                npos) {  // Skip header in export block if still present
+        if (line.find("Summary") != std::string::npos) {
             break;
         }
         output_file << "    "
