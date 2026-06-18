@@ -30,7 +30,8 @@ bool CoffReaderWriter::Open() {
         return false;
     }
     try {
-        ScopedFileAccess const obtain_write(coff_file, GENERIC_ALL);
+        ScopedFileAccess obtain_write(coff_file, GENERIC_ALL);
+        obtain_write.Access();
         this->pe_stream_.open(this->file_,
                               std::ios::in | std::ios::out | std::ios::binary);
         return this->pe_stream_.is_open();
