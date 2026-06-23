@@ -153,27 +153,6 @@ std::map<std::string, std::string> ParseRelocate(const char** args, int argc) {
     return opts;
 }
 
-std::map<std::string, std::string> ParseReport(int argc, const char** args) {
-    std::map<std::string, std::string> opts;
-    for (int i = 0; i < argc; ++i) {
-        if (endswith(std::string(args[i]), ".dll") ||
-            endswith(std::string(args[i]), ".exe")) {
-            if (redefinedArgCheck(opts, "pe", "pe")) {
-                opts.clear();
-                return opts;
-            }
-            opts.insert(std::pair<std::string, std::string>("pe", args[i]));
-        } else if (endswith(std::string(args[i]), ".lib")) {
-            if (redefinedArgCheck(opts, "coff", "coff")) {
-                opts.clear();
-                return opts;
-            }
-            opts.insert(std::pair<std::string, std::string>("coff", args[i]));
-        }
-    }
-    return opts;
-}
-
 bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_relocate) {
     if (no_args && is_relocate) {
         return print_help();
