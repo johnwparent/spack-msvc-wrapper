@@ -113,10 +113,6 @@ bool IsRelocate(const char* arg) {
     return CLICheck(arg, "relocate");
 }
 
-bool IsReport(const char* arg) {
-    return CLICheck(arg, "report");
-}
-
 /**
  * Parse the command line arguments supportin the relocate command
  */
@@ -178,8 +174,8 @@ std::map<std::string, std::string> ParseReport(int argc, const char** args) {
     return opts;
 }
 
-bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_report, bool is_relocate) {
-    if (no_args && (is_relocate || is_report)) {
+bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_relocate) {
+    if (no_args && is_relocate) {
         return print_help();
     }
     if (!no_args && (strcmp(arg[1], "--help") == 0 || strcmp(arg[1], "-h") == 0)) {

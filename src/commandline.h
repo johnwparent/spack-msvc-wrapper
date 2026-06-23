@@ -19,4 +19,4 @@ std::map<std::string, std::string> ParseRelocate(const char** args, int argc);
 std::map<std::string, std::string> ParseReport(int argc, const char** args);
 
 // Writes CLI help message to stdout
-bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_report, bool is_relocate);
+bool CheckAndPrintHelp(const char** arg, bool no_args, bool is_relocate);
