@@ -364,8 +364,36 @@ bool LibRename::ExecuteLibRename() {
         return false;
     }
     // replace former .lib with renamed .lib
-    std::remove(this->coff.c_str());
-    std::rename(this->new_lib.c_str(), this->coff.c_str());
+    // The original import lib may have been extracted from a buildcache
+    // with the Read-Only attribute set (and may lack an ACL entry granting
+    // us write access), which would cause the remove below to fail. If that
+    // happens, the subsequent rename silently no-ops (the destination still
+    // exists), leaving the correctly renamed `new_lib` orphaned on disk and
+    // the original import lib untouched. Grant ourselves access first so
+    // failures here are real failures.
+    try {
+        std::wstring const coff_path = ConvertASCIIToWide(this->coff);
+        ScopedFileAccess obtain_write(coff_path, GENERIC_ALL);
+        obtain_write.Access();
+        if (std::remove(this->coff.c_str()) != 0) {
+            std::cerr << "Unable to remove original import library: "
+                      << this->coff << "\n";
+            return false;
+        }
+        if (std::rename(this->new_lib.c_str(), this->coff.c_str()) != 0) {
+            std::cerr << "Unable to rename temporary import library "
+                      << this->new_lib << " to " << this->coff << "\n";
+            return false;
+        }
+    } catch (const std::overflow_error& e) {
+        std::cerr << e.what() << "\n";
+        return false;
+    } catch (const std::system_error& e) {
+        std::cerr << "Could not obtain write access to " << this->coff << ": "
+                  << e.what() << " (Error Code: " << e.code().value() << ")"
+                  << "\n";
+        return false;
+    }
     // import library has been generated with
     // mangled abs path to dll -
     // unmangle it
