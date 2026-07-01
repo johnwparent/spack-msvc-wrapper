@@ -267,36 +267,9 @@ bool isCommandArg(const std::string& arg, const std::string& command);
 
 void normalArg(std::string& arg);
 
-/**
- * Library Searching utility class
- *  Collection of heuristics and logic surrounding library
- *  searching on a filesystem
- * 
- *  Takes a library to search for and collects information about the search
- *  including any libraries found with that name, the variables used to search
- *  and the paths evaluated for that library location
- * 
- *  Differentiates between system and user libraries
- */
-class LibraryFinder {
-   private:
-    std::map<std::string, std::string> found_libs;
-    std::vector<std::string> search_vars;
-    std::map<std::string, std::vector<std::string>> evald_search_paths;
-    static std::string Finder(const std::string& pth,
-                              const std::string& lib_name);
-    static bool IsSystem(const std::string& pth);
-
-   public:
-    LibraryFinder();
-    std::string FindLibrary(const std::string& lib_name,
-                            const std::string& lib_path);
-    void EvalSearchPaths();
-};
-
 class PathRelocator {
    private:
-    bool bc_ = true;  // default: build-cache prefix→prefix mode
+    bool bc_ = true;
     std::string new_prefix_;
     std::map<std::string, std::string> old_new_map;
     std::string relocateBC(std::string const& pe);
