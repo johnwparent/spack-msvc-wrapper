@@ -175,17 +175,30 @@ DWORD LdInvocation::InvokeToolchain() {
     }
     debug("Renaming library from " + abs_out_imp_lib_name + " to " +
           imp_lib_name);
-    int const remove_exitcode = std::remove(imp_lib_name.c_str());
-    if (remove_exitcode) {
-        debug("Failed to remove original import library with exit code: " +
-              remove_exitcode);
-        return ExitConditions::LIB_REMOVE_FAILURE;
-    }
-    int const rename_exitcode =
-        std::rename(abs_out_imp_lib_name.c_str(), imp_lib_name.c_str());
-    if (rename_exitcode) {
-        debug("Failed to rename temporary import library with exit code: " +
-              rename_exitcode);
+    try {
+        std::wstring const imp_lib_path = ConvertASCIIToWide(imp_lib_name);
+        ScopedFileAccess obtain_write(imp_lib_path, GENERIC_ALL);
+        obtain_write.Access();
+        int const remove_exitcode = std::remove(imp_lib_name.c_str());
+        if (remove_exitcode) {
+            debug("Failed to remove original import library with exit code: " +
+                  remove_exitcode);
+            return ExitConditions::LIB_REMOVE_FAILURE;
+        }
+        int const rename_exitcode =
+            std::rename(abs_out_imp_lib_name.c_str(), imp_lib_name.c_str());
+        if (rename_exitcode) {
+            debug("Failed to rename temporary import library with exit code: " +
+                  rename_exitcode);
+            return ExitConditions::FILE_RENAME_FAILURE;
+        }
+    } catch (const std::overflow_error& e) {
+        std::cerr << e.what() << "\n";
+        return ExitConditions::FILE_RENAME_FAILURE;
+    } catch (const std::system_error& e) {
+        std::cerr << "Could not obtain write access to " << imp_lib_name
+                  << ": " << e.what() << " (Error Code: " << e.code().value()
+                  << ")" << "\n";
         return ExitConditions::FILE_RENAME_FAILURE;
     }
     return ret_code;
