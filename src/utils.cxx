@@ -779,101 +779,6 @@ bool SpackInstalledLib(const std::string& lib) {
     return startswith(stripped_lib, prefix);
 }
 
-LibraryFinder::LibraryFinder() : search_vars{"SPACK_RELOCATE_PATH"} {}
-
-std::string LibraryFinder::FindLibrary(const std::string& lib_name,
-                                       const std::string& lib_path) {
-    // Read env variables and split into paths
-    // Only ever run once
-    // First check if lib is absolute path
-    if (LibraryFinder::IsSystem(lib_path)) {
-        return std::string();
-    }
-    // next search the CWD
-    std::string const cwd(GetCWD());
-    auto cwd_res = LibraryFinder::Finder(cwd, lib_name);
-    if (!cwd_res.empty()) {
-        return cwd_res;
-    }
-    this->EvalSearchPaths();
-    if (this->evald_search_paths.empty()) {
-        return std::string();
-    }
-    // next search env variable paths
-    for (const std::string& var : this->search_vars) {
-        std::vector<std::string> const searchable_paths =
-            this->evald_search_paths.at(var);
-        for (const std::string& pth : searchable_paths) {
-            auto res = LibraryFinder::Finder(pth, lib_name);
-            if (!res.empty()) {
-                return res;
-            }
-        }
-    }
-    return std::string();
-}
-
-void LibraryFinder::EvalSearchPaths() {
-    if (!this->evald_search_paths.empty())
-        return;
-    for (const std::string& var : this->search_vars) {
-        std::string const env_val = GetSpackEnv(var.c_str());
-        if (!env_val.empty()) {
-            this->evald_search_paths[var] = split(env_val, ";");
-        }
-    }
-}
-
-/**
- * Searches files located at pth for a file called lib_name
- * \param pth the path at which to search for a given file
- * \param lib_name the file to be seached for
- * 
- * \return an empty string if nothing is found, the absolute path to
- * the discovered file with name lib_name
- */
-std::string LibraryFinder::Finder(const std::string& pth,
-                                  const std::string& lib_name) {
-    WIN32_FIND_DATAW find_file_data;
-    // Globs all files at the provided path and matches to search
-    // for lib name
-    std::string const searcher = pth + "\\*";
-    std::wstring search_str;
-    try {
-        search_str = ConvertASCIIToWide(searcher);
-    } catch (const std::overflow_error& e) {
-        std::cerr << e.what() << "\n";
-        return std::string();
-    }
-    HANDLE h_find = FindFirstFileW(search_str.c_str(), &find_file_data);
-    if (h_find == INVALID_HANDLE_VALUE) {
-        std::cerr << "Find file failed: " << reportLastError() << " "
-                  << searcher << "\n";
-        FindClose(h_find);
-        return std::string();
-    }
-
-    do {
-        try {
-            if (wcscmp(find_file_data.cFileName,
-                       ConvertASCIIToWide(lib_name).c_str()) == 0) {
-                return pth + "\\" +
-                       ConvertWideToASCII(find_file_data.cFileName);
-            }
-        } catch (const std::overflow_error& e) {
-            debug("Overflow converting " + lib_name +
-                  "to alternate representation\n" + "Exception: " + e.what());
-        }
-    } while (FindNextFileW(h_find, &find_file_data));
-
-    DWORD const dw_error = GetLastError();
-    if (dw_error != ERROR_NO_MORE_FILES) {
-        std::cerr << "Find file failed: " << reportLastError() << "\n";
-    }
-    FindClose(h_find);
-    return std::string();
-}
-
 PathRelocator::PathRelocator() {
     this->new_prefix_ = GetSpackEnv("SPACK_INSTALL_PREFIX");
     this->parseRelocate();
@@ -936,21 +841,6 @@ std::string PathRelocator::relocateStage(std::string const& pe) {
         debug("Could not find path to " + pe + "in relocation mapping");
         return std::string();
     }
-}
-
-namespace {
-std::vector<std::string> system_locations = {
-    "api-ms-", "ext-ms-",   "ieshims", "emclient", "devicelock",
-    "wpax",    "vcruntime", "WINDOWS", "system32", "KERNEL32",
-    "WS2_32",  "dbghelp",   "bcrypt",  "ADVAPI32", "SHELL32",
-    "CRYPT32", "USER32",    "ole32",   "OLEAUTH32"};
-}
-
-bool LibraryFinder::IsSystem(const std::string& pth) {
-    return std::any_of(system_locations.cbegin(), system_locations.cend(),
-                       [&](const std::string& loc) {
-                           return pth.find(loc) != std::string::npos;
-                       });
 }
 
 int SafeHandleCleanup(HANDLE& handle) {
@@ -1248,7 +1138,6 @@ NameTooLongError::NameTooLongError(char const* const message)
 char const* NameTooLongError::what() const {
     return exception::what();
 }
-
 
 FileNotExist::FileNotExist(char const* const message)
     : std::runtime_error(message) {}
