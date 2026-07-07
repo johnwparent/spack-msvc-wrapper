@@ -895,7 +895,12 @@ void PathRelocator::parseRelocate() {
         const std::string& old = strip_padding(old_new[0]);
         const std::string& new_ = strip_padding(old_new[1]);
         this->old_new_map[old] = new_;
-        if (endswith(old, ".dll") || endswith(old, ".exe")) {
+        // SFN-shortened paths are rendered by Windows in all uppercase (e.g.
+        // "VERYLO~1.DLL"), so this check must be case-insensitive to
+        // correctly detect them as a single-file (not prefix) mapping.
+        std::string lower_old = old;
+        lower(lower_old);
+        if (endswith(lower_old, ".dll") || endswith(lower_old, ".exe")) {
             this->bc_ = false;
         }
     }
