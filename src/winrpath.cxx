@@ -267,6 +267,10 @@ std::string LibRename::ComputeDefLine() {
 bool LibRename::ComputeDefFile() {
     this->def_executor.Execute(this->tmp_def_file);
     DWORD const def_res = this->def_executor.Join();
+    // Release the handle used to capture dumpbin's output now, otherwise it
+    // stays open (and blocks removal of tmp_def_file below) until def_executor
+    // is destroyed.
+    this->def_executor.CleanupHandles();
     if (def_res) {
         return false;
     }
@@ -366,6 +370,8 @@ bool LibRename::ExecuteLibRename() {
         std::cerr << "Lib Rename failed with exit code: " << ret_code << "\n";
         return false;
     }
+    // lib.exe has consumed the def file at this point, clean it up
+    std::remove(this->def_file.c_str());
     // replace former .lib with renamed .lib
     // The original import lib may have been extracted from a buildcache
     // with the Read-Only attribute set (and may lack an ACL entry granting
@@ -388,6 +394,10 @@ bool LibRename::ExecuteLibRename() {
                       << this->new_lib << " to " << this->coff << "\n";
             return false;
         }
+        // lib.exe emits a .exp file alongside new_lib as a byproduct of
+        // regenerating the import library; it has no further use once the
+        // renamed import lib is in place.
+        std::remove((stem(this->new_lib) + ".exp").c_str());
     } catch (const std::overflow_error& e) {
         std::cerr << e.what() << "\n";
         return false;

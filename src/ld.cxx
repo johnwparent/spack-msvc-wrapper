@@ -192,6 +192,10 @@ DWORD LdInvocation::InvokeToolchain() {
                   rename_exitcode);
             return ExitConditions::FILE_RENAME_FAILURE;
         }
+        // lib.exe emits a .exp file alongside abs_out_imp_lib_name as a
+        // byproduct of generating the import library; it has no further use
+        // once the renamed import lib is in place.
+        std::remove((stem(abs_out_imp_lib_name) + ".exp").c_str());
     } catch (const std::overflow_error& e) {
         std::cerr << e.what() << "\n";
         return ExitConditions::FILE_RENAME_FAILURE;
