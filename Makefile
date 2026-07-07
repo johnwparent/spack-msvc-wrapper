@@ -223,6 +223,23 @@ test_relocate_long_paths: test_long_paths
 	.\tester.exe
 	cd ../../../..
 
+
+test_relocate_long_paths_full: test_long_paths
+	@echo \n
+	@echo --------------------------------------
+	@echo Running relocate long paths full test
+	@echo --------------------------------------
+	cd tmp\tmp\verylongdirectoryname\evenlongersubdirectoryname
+	-@ if NOT EXIST "relocate.exe" mklink relocate.exe cl.exe
+	mkdir ..\relocated2
+	mkdir ..\relocated3
+	for %%I in (verylongfilepathnamethatwilldefinitelybegreaterthanonehundredandfourtyfourcharacters.dll) do (SET SPACK_RELOCATE_PATH=%%~fsI^|$(MAKEDIR)\tmp\tmp\verylongdirectoryname\relocated2\long.dll&& move %%I ..\relocated2\long.dll && relocate.exe --pe tester.exe --full && tester.exe)
+	move ..\relocated2\long.dll ..\relocated3\long.dll
+	SET SPACK_RELOCATE_PATH=$(MAKEDIR)\tmp\tmp\verylongdirectoryname\relocated2\long.dll|$(MAKEDIR)\tmp\tmp\verylongdirectoryname\relocated3\long.dll
+	relocate.exe --pe tester.exe --full
+	tester.exe
+	cd ../../../..
+
 test_exe_with_exports:
 	@echo \n
 	@echo ------------------------------
