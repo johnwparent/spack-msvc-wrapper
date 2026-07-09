@@ -19,11 +19,12 @@
 #include <Intsafe.h>
 
 int main(int argc, const char* argv[]) {
-
-    if (CheckAndPrintHelp(argv, argc)) {
+    const bool is_relocate = IsRelocate(argv[0]);
+    const bool no_args = argc < 2;
+    if (CheckAndPrintHelp(argv, no_args, is_relocate)) {
         return 0;
     }
-    if (IsRelocate(argv[0])) {
+    if (is_relocate) {
         std::map<std::string, std::string> patch_args =
             ParseRelocate(argv + 1, argc - 1);
         if (patch_args.empty()) {
@@ -89,32 +90,6 @@ int main(int argc, const char* argv[]) {
         if (!rpath_lib->ExecuteRename()) {
             std::cerr << "Library rename failed\n";
             return ExitConditions::RENAME_FAILURE;
-        }
-    } else if (IsReport(argv[0])) {
-        std::map<std::string, std::string> report_args =
-            ParseReport(argc - 1, argv + 1);
-        if (report_args.empty()) {
-            std::cerr << "Unable to parse command line for reporting\n"
-                      << "run command with --help flag for accepted command "
-                         "line arguments\n";
-            return ExitConditions::CLI_FAILURE;
-        }
-        if (report_args.find("pe") != report_args.end()) {
-            try {
-                LibRename portable_executable(report_args.at("pe"),
-                                              std::string(), false, true);
-                portable_executable.ExecuteRename();
-            } catch (const NameTooLongError& e) {
-                std::cerr
-                    << "Unable to parse command line for reporting\n"
-                    << "run command with --help flag for accepted command "
-                       "line arguments\n";
-                return ExitConditions::CLI_FAILURE;
-            }
-        } else {
-            CoffReaderWriter coff_reader(report_args.at("coff"));
-            CoffParser coff(&coff_reader);
-            return static_cast<int>(reportCoff(coff));
         }
     } else {
         // Ensure required variables are set

@@ -24,6 +24,7 @@ class LinkerInvocation {
     StrList get_input_files() const;
     std::string get_lib_link_args() const;
     bool makeRsp();
+    bool isHelp() const;
 
    private:
     void ProcessTokens(const std::string &normal_token, const std::string& token);
@@ -39,7 +40,8 @@ class LinkerInvocation {
     StrList command_files_;
     StrList input_files_;
     StrList tokens_;
-    bool is_exe_;
+    bool is_exe_ = true;
+    bool is_help_ = false;
     std::map<std::string, StrList> piped_args_ = {
         {"export", {}},    {"include", {}}, {"libpath", {}},
         {"ltcg", {}},      {"machine", {}}, {"nodefaultlib", {}},

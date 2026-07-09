@@ -47,6 +47,11 @@ DWORD LdInvocation::InvokeToolchain() {
     } catch (const FileIOError& e) {
         return ExitConditions::FILE_IO_FAILURE;
     }
+    // If there are no arguments (or the argument is just "/?")
+    // just print help and return
+    if(link_run.get_input_files().empty() || link_run.isHelp()) {
+        return ToolChainInvocation::InvokeToolchain();
+    }
 
     try {
         link_run.makeRsp();
