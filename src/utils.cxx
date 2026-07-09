@@ -933,6 +933,7 @@ std::string PathRelocator::relocateStage(std::string const& pe) {
         std::string prefix_loc = this->old_new_map.at(pe);
         return prefix_loc;
     } catch (std::out_of_range& e) {
+        debug("Could not find path to " + pe + "in relocation mapping");
         return std::string();
     }
 }

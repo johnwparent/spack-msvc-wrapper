@@ -53,6 +53,7 @@ bool LibRename::SpackCheckForDll(const std::string& dll_path) {
 */
 bool LibRename::RenameDll(char* name_loc, const std::string& dll_path) {
     if (SpackInstalledLib(dll_path)) {
+        debug("Spack installed dll reference, no need to relocate");
         return true;
     }
     PathRelocator relocator;
@@ -194,7 +195,9 @@ bool LibRename::FindDllAndRename(HANDLE& pe_in) {
             import_table_offset +
             (import_image_descriptor->Name - rva_import_directory);
         std::string const str_dll_name = std::string(imported_dll);
+        debug("Considering library: " + str_dll_name + " for relocation");
         if (LibRename::SpackCheckForDll(str_dll_name)) {
+            debug("Spack dll: " + str_dll_name);
             if (!LibRename::RenameDll(imported_dll, str_dll_name)) {
                 std::cerr << "Unable to relocate DLL reference: "
                           << str_dll_name << "\n";
