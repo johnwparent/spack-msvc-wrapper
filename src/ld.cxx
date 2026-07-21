@@ -50,7 +50,25 @@ DWORD LdInvocation::InvokeToolchain() {
     // If there are no arguments (or the argument is just "/?")
     // just print help and return
     if(link_run.get_input_files().empty() || link_run.isHelp()) {
+        if (!link_run.isHelp() && !this->inputs.empty()) {
+            // A populated link line the parser finds no file inputs on
+            // is a parser gap, not a help invocation; the outputs of
+            // this link will carry no Spack relocation metadata and
+            // that must not happen silently
+            std::cerr << "Spack compiler wrapper: no file inputs "
+                         "recognized on link line; outputs will not be "
+                         "relocatable\n";
+            debug("Unrecognized link line: " + join(this->inputs));
+        }
         return ToolChainInvocation::InvokeToolchain();
+    }
+
+    // Parsing a def file that names its output rewrites it into a temporary
+    // "-rename.def" copy (sans NAME/LIBRARY) for the import lib regeneration
+    // below; that copy is scratch and should not outlive this invocation
+    ScopedTempFile def_rename_cleanup(link_run.get_def_file());
+    if (!link_run.def_file_is_temp()) {
+        def_rename_cleanup.Keep();
     }
 
     try {
@@ -156,6 +174,11 @@ DWORD LdInvocation::InvokeToolchain() {
                                            link_run.get_input_files()}));
     this->rpath_executor.Execute();
     DWORD const err_code = this->rpath_executor.Join();
+    // lib.exe's outputs (the temporary import lib, which the rename below
+    // consumes on success, and a .exp byproduct) are scratch — make sure
+    // neither survives this function, whichever path exits it
+    ScopedTempFile const abs_lib_cleanup(abs_out_imp_lib_name);
+    ScopedTempFile const exp_cleanup(stem(abs_out_imp_lib_name) + ".exp");
     if (err_code != 0) {
         return err_code;
     }

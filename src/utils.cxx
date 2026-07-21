@@ -1170,6 +1170,28 @@ bool ScopedFileAccess::IsAccessGranted() const {
                                        current_user_sid_.get());
 }
 
+ScopedTempFile::ScopedTempFile(std::string file_path)
+    : file_path_(std::move(file_path)), keep_(false) {}
+
+ScopedTempFile::~ScopedTempFile() {
+    if (keep_) {
+        return;
+    }
+    if (!DeleteFileA(file_path_.c_str())) {
+        DWORD const err = ::GetLastError();
+        // The file having already been consumed (renamed away or never
+        // produced) is the common success case, not a cleanup failure
+        if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
+            debug("Failed to remove temporary file " + file_path_ + ": " +
+                  reportLastError());
+        }
+    }
+}
+
+void ScopedTempFile::Keep() {
+    this->keep_ = true;
+}
+
 NameTooLongError::NameTooLongError(char const* const message)
     : std::runtime_error(message) {}
 

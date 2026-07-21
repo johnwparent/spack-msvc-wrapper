@@ -134,6 +134,13 @@ void LinkerInvocation::Parse() {
 
 
 std::string handleQuotedStrings(std::stringstream& ss, std::string &input) {
+    // A token that already ends with its closing quote is complete
+    // (a quoted path without spaces); consuming further tokens here
+    // would merge unrelated arguments into one garbage token
+    if (input.length() > 1 && input.back() == '"') {
+        input = stripquotes(input);
+        return input;
+    }
     std::string token;
     while (ss >> token) {
         input += " " + token;
@@ -273,6 +280,7 @@ void LinkerInvocation::processDefFile() {
         }
         def_out.close();
         this->def_file_ = rename_def;
+        this->def_file_is_temp_ = true;
     }
     def_in.close();
 }
@@ -299,6 +307,10 @@ std::string LinkerInvocation::get_lib_link_args() const {
 
 std::string LinkerInvocation::get_def_file() const {
     return this->def_file_;
+}
+
+bool LinkerInvocation::def_file_is_temp() const {
+    return this->def_file_is_temp_;
 }
 
 StrList LinkerInvocation::get_rc_files() const {
