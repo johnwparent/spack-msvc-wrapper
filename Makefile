@@ -151,6 +151,26 @@ test_relocate_dll: build_and_check_test_sample
 	.\tester.exe
 	cd ../..
 
+# Test rsp-driven links - build systems like CMake+Ninja and Meson pass
+# inputs (and sometimes flags) through an rsp file, with paths quoted.
+# The wrapper must still parse the inputs and inject the absolute dll
+# path/id resource; the moved tester only runs if the import library
+# carried the absolute path to calcrsp.dll
+test_rsp_link: build_and_check_test_sample
+	@echo \n
+	@echo ---------------------
+	@echo Running RSP link test
+	@echo ---------------------
+	cd tmp\test
+	echo "calc.obj" /out:calcrsp.dll /implib:calcrsp.lib /DLL > calcrsp.rsp
+	link @calcrsp.rsp
+	link main.obj calcrsp.lib /out:testerrsp.exe
+	cd ..
+	move test\testerrsp.exe .\testerrsp.exe
+	.\testerrsp.exe
+	del testerrsp.exe
+	cd ..
+
 test_pipe_out_overflow: build_and_check_test_sample
 	@echo \n
 	@echo ---------------------------
@@ -287,7 +307,7 @@ test_def_file_name_override:
 test_and_cleanup: test clean-test
 
 
-test: test_wrapper test_relocate_exe test_relocate_dll test_def_file_name_override test_exe_with_exports test_long_paths test_pipe_out_overflow test_pipe_error_overflow
+test: test_wrapper test_relocate_exe test_relocate_dll test_rsp_link test_def_file_name_override test_exe_with_exports test_long_paths test_pipe_out_overflow test_pipe_error_overflow
 
 
 clean : clean-test clean-cl
