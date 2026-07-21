@@ -271,6 +271,9 @@ bool LibRename::ComputeDefFile() {
     // stays open (and blocks removal of tmp_def_file below) until def_executor
     // is destroyed.
     this->def_executor.CleanupHandles();
+    // tmp_def_file is scratch regardless of outcome; remove it on every
+    // exit path, including dumpbin failures that leave partial output
+    ScopedTempFile const tmp_def_cleanup(this->tmp_def_file);
     if (def_res) {
         return false;
     }
@@ -304,7 +307,6 @@ bool LibRename::ComputeDefFile() {
     }
     input_file.close();
     output_file.close();
-    std::remove(this->tmp_def_file.c_str());
     return true;
 }
 
@@ -366,20 +368,24 @@ bool LibRename::ExecuteRename() {
 bool LibRename::ExecuteLibRename() {
     this->lib_executor.Execute();
     DWORD const ret_code = this->lib_executor.Join();
+    // lib.exe has consumed the def file at this point; it and lib.exe's
+    // outputs (the temporary import lib, which the rename below consumes
+    // on success, and a .exp byproduct) are scratch — make sure none of
+    // them survive this function, whichever path exits it
+    ScopedTempFile const def_cleanup(this->def_file);
+    ScopedTempFile const new_lib_cleanup(this->new_lib);
+    ScopedTempFile const exp_cleanup(stem(this->new_lib) + ".exp");
     if (ret_code != 0) {
         std::cerr << "Lib Rename failed with exit code: " << ret_code << "\n";
         return false;
     }
-    // lib.exe has consumed the def file at this point, clean it up
-    std::remove(this->def_file.c_str());
     // replace former .lib with renamed .lib
     // The original import lib may have been extracted from a buildcache
     // with the Read-Only attribute set (and may lack an ACL entry granting
     // us write access), which would cause the remove below to fail. If that
     // happens, the subsequent rename silently no-ops (the destination still
-    // exists), leaving the correctly renamed `new_lib` orphaned on disk and
-    // the original import lib untouched. Grant ourselves access first so
-    // failures here are real failures.
+    // exists), leaving the original import lib untouched. Grant ourselves
+    // access first so failures here are real failures.
     try {
         std::wstring const coff_path = ConvertASCIIToWide(this->coff);
         ScopedFileAccess obtain_write(coff_path, GENERIC_ALL);
@@ -394,10 +400,6 @@ bool LibRename::ExecuteLibRename() {
                       << this->new_lib << " to " << this->coff << "\n";
             return false;
         }
-        // lib.exe emits a .exp file alongside new_lib as a byproduct of
-        // regenerating the import library; it has no further use once the
-        // renamed import lib is in place.
-        std::remove((stem(this->new_lib) + ".exp").c_str());
     } catch (const std::overflow_error& e) {
         std::cerr << e.what() << "\n";
         return false;

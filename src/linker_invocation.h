@@ -20,6 +20,7 @@ class LinkerInvocation {
     std::string get_mangled_out() const;
     std::string get_implib_name() const;
     std::string get_def_file() const;
+    bool def_file_is_temp() const;
     StrList get_rc_files() const;
     StrList get_input_files() const;
     std::string get_lib_link_args() const;
@@ -42,6 +43,7 @@ class LinkerInvocation {
     StrList tokens_;
     bool is_exe_ = true;
     bool is_help_ = false;
+    bool def_file_is_temp_ = false;
     std::map<std::string, StrList> piped_args_ = {
         {"export", {}},    {"include", {}}, {"libpath", {}},
         {"ltcg", {}},      {"machine", {}}, {"nodefaultlib", {}},
