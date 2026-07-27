@@ -753,6 +753,34 @@ bool fileExists(const std::string& fname) {
     return exists;
 }
 
+bool ReplaceFileWithRename(const std::string& original,
+                           const std::string& replacement) {
+    try {
+        std::wstring const original_path = ConvertASCIIToWide(original);
+        ScopedFileAccess obtain_write(original_path, GENERIC_ALL);
+        obtain_write.Access();
+        if (std::remove(original.c_str()) != 0) {
+            std::cerr << "Unable to remove original file: " << original
+                      << "\n";
+            return false;
+        }
+        if (std::rename(replacement.c_str(), original.c_str()) != 0) {
+            std::cerr << "Unable to rename temporary file " << replacement
+                      << " to " << original << "\n";
+            return false;
+        }
+    } catch (const std::overflow_error& e) {
+        std::cerr << e.what() << "\n";
+        return false;
+    } catch (const std::system_error& e) {
+        std::cerr << "Could not obtain write access to " << original << ": "
+                  << e.what() << " (Error Code: " << e.code().value() << ")"
+                  << "\n";
+        return false;
+    }
+    return true;
+}
+
 /**
  * Determines whether a string contains path characters
  *  \param name string to check for path characters

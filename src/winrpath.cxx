@@ -367,8 +367,9 @@ bool LibRename::ExecuteLibRename() {
         return false;
     }
     // replace former .lib with renamed .lib
-    std::remove(this->coff.c_str());
-    std::rename(this->new_lib.c_str(), this->coff.c_str());
+    if (!ReplaceFileWithRename(this->coff, this->new_lib)) {
+        return false;
+    }
     // import library has been generated with
     // mangled abs path to dll -
     // unmangle it

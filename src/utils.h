@@ -224,6 +224,25 @@ std::string EnsureValidLengthPath(const std::string& path);
  */
 bool fileExists(const std::string& fname);
 
+/**
+ * @brief Swaps `replacement` in for `original` on disk (used to promote a
+ * freshly regenerated import library over the one it replaces).
+ *
+ * The original file may have been extracted from a buildcache with the
+ * Read-Only attribute set (and may lack an ACL entry granting us write
+ * access), which would cause the remove to fail. If that happens, a
+ * subsequent rename would silently no-op (the destination still exists),
+ * leaving `replacement` orphaned on disk and `original` untouched. Write
+ * access is obtained first so failures here are real failures.
+ *
+ * @param original path to the file being replaced
+ * @param replacement path to the file to rename over `original`
+ *
+ * @return true on success, false (with a diagnostic on stderr) otherwise
+ */
+bool ReplaceFileWithRename(const std::string& original,
+                           const std::string& replacement);
+
 // Returns File offset given RVA
 DWORD RvaToFileOffset(PIMAGE_SECTION_HEADER& section_header,
                       DWORD number_of_sections, DWORD rva);
