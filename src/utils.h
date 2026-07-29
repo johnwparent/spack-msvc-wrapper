@@ -289,7 +289,6 @@ void normalArg(std::string& arg);
 class PathRelocator {
    private:
     bool bc_ = true;
-    std::string new_prefix_;
     std::map<std::string, std::string> old_new_map;
     std::string relocateBC(std::string const& pe);
     std::string relocateStage(std::string const& pe);
