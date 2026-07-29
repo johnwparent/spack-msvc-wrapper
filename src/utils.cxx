@@ -776,11 +776,13 @@ bool SpackInstalledLib(const std::string& lib) {
         return false;
     }
     std::string const stripped_lib = strip_padding(lib);
-    return startswith(stripped_lib, prefix);
+    if (!startswith(stripped_lib, prefix))
+        return false;
+    const DWORD dw_attrib = GetFileAttributesW(ConvertASCIIToWide(lib).c_str());
+    return dw_attrib != INVALID_FILE_ATTRIBUTES;
 }
 
 PathRelocator::PathRelocator() {
-    this->new_prefix_ = GetSpackEnv("SPACK_INSTALL_PREFIX");
     this->parseRelocate();
 }
 
@@ -835,7 +837,10 @@ std::string PathRelocator::relocateBC(std::string const& pe) {
             }
         }
     }
-    return std::string();
+    // Don't fail if we're relocating from a BC
+    // Just warn
+    debug("Unable to find relocation mapping for library: " + pe);
+    return pe;
 }
 
 std::string PathRelocator::relocateStage(std::string const& pe) {
