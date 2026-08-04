@@ -83,7 +83,9 @@ void ToolChainInvocation::ParseCommandArgs(char const* const* cli) {
 }
 
 std::string ToolChainInvocation::ComposeIncludeArg(const std::string& include) {
-    return "/external:I\"" + include + "\"";
+    // Arguments are composed unquoted; quoting of the assembled command line
+    // is applied by quoteAsNeeded
+    return "/external:I" + include;
 }
 
 std::string ToolChainInvocation::ComposeLibPathArg(const std::string& libPath) {

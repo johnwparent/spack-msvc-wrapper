@@ -249,6 +249,48 @@ test_rsp_link: build_and_check_test_sample
 	del testerrsp.exe
 	cd ..
 
+# Test an rsp naming an input whose path contains a space, alongside a library
+# path argument ending in a separator. Both have to survive the wrapper's
+# rendering of the command line it passes on: an unquoted space splits the
+# input in two, and an unescaped trailing separator escapes the closing quote
+# and swallows the argument that follows it
+test_rsp_link_spaces : build_and_check_test_sample
+	@echo \n
+	@echo ---------------------------------
+	@echo Running RSP link with spaces test
+	@echo ---------------------------------
+	cd tmp\test
+	-@ if NOT EXIST "obj dir" mkdir "obj dir"
+	cl /c /EHsc "..\..\test\src file\calc.cxx" /DCALC_EXPORTS /DCALC_HEADER="\"calc header/calc.h\"" /I ..\..\test\include /Fo"obj dir\calcsp.obj"
+	echo "obj dir\calcsp.obj" /out:calcsp.dll /implib:calcsp.lib /DLL > calcsp.rsp
+	link @calcsp.rsp
+	link $(LFLAGS) /LIBPATH:"$(MAKEDIR)\tmp\test\obj dir\\" main.obj calcsp.lib /out:testersp.exe
+	cd ..
+	move test\testersp.exe .\testersp.exe
+	.\testersp.exe
+	del testersp.exe
+	cd ..
+
+# Test a link whose input list is too long to be passed on as arguments - the
+# wrapper has to hand the inputs to lib.exe through an rsp file of its own.
+# The moved tester only runs if that pass produced an import library carrying
+# the absolute path to calcbig.dll
+test_rsp_overflow : build_and_check_test_sample
+	@echo \n
+	@echo -------------------------
+	@echo Running RSP overflow test
+	@echo -------------------------
+	cd tmp\test
+	echo "calc.obj" /out:calcbig.dll /implib:calcbig.lib /DLL > calcbig.rsp
+	..\..\test\make_rsp_overflow.bat calcbig.rsp
+	link @calcbig.rsp
+	link $(LFLAGS) main.obj calcbig.lib /out:testerbig.exe
+	cd ..
+	move test\testerbig.exe .\testerbig.exe
+	.\testerbig.exe
+	del testerbig.exe
+	cd ..
+
 test_pipe_out_overflow: build_and_check_test_sample
 	@echo \n
 	@echo ---------------------------
@@ -385,7 +427,7 @@ test_def_file_name_override:
 test_and_cleanup: test clean-test
 
 
-test: test_wrapper test_relocate_exe test_relocate_dll test_relocate_dll_full test_rsp_link test_def_file_name_override test_exe_with_exports test_long_paths test_pipe_out_overflow test_pipe_error_overflow
+test: test_wrapper test_relocate_exe test_relocate_dll test_relocate_dll_full test_rsp_link test_rsp_link_spaces test_rsp_overflow test_def_file_name_override test_exe_with_exports test_long_paths test_pipe_out_overflow test_pipe_error_overflow
 
 
 clean : clean-test clean-cl

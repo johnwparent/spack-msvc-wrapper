@@ -147,6 +147,10 @@ void quoteList(StrList& args);
 
 void quoteAsNeeded(std::string& str);
 
+// Length of args as rendered on a command line: each argument quoted as
+// quoteAsNeeded renders it, plus one separating character each
+size_t QuotedCommandLength(const StrList& args);
+
 // FS/Path helpers //
 
 // Returns current working directory

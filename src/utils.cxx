@@ -273,49 +273,67 @@ void lower(std::string& str) {
 }
 
 /**
- * Quotes str as needed
- *  If str has existing escaped quotes, or a space/reserved character
- *  Escape escaped quotes using an escaped backslash preceding the escaped
- *  quote. Escape reserved characters by quoting the entire string
- * 
- *  Return the escaped string
+ * Renders str as a single command line argument
+ *
+ *  Wraps the string in quotes if it contains a space or one of the reserved
+ *  characters &<>|(), and escapes any quote the string itself contains.
+ *
+ *  Windows argument parsing treats a backslash as an escape character only
+ *  where it precedes a double quote: 2n backslashes before a quote yield n
+ *  backslashes and a delimiter, 2n+1 yield n backslashes and a literal quote.
+ *  Runs of backslashes adjacent to a quote are therefore doubled; every other
+ *  backslash is passed through unchanged.
  */
 void quoteAsNeeded(std::string& str) {
-    // Note: the ordering if these two conditionals is important
-    // If the second conditional is executed first, the first
-    // will always be true as the second injects the string
-    // on which the first is conditioned
-    // Basically: If we find escaped strings: escape em again
-    // If we find space/special chars: escape the whole string
-
-    if (str.find_first_of('\"') != std::string::npos) {
-        // If there are escaped quotes in input
-        // We need to escape them as well as we're adding another
-        // layer of indirection between caller and compiler
-        // This runs for every argument of every invocation, so it is a plain
-        // scan rather than a regex - constructing a std::regex is one of the
-        // most expensive operations in the standard library
-        std::string escaped;
-        escaped.reserve(str.size() + 8);
-        for (char const chr : str) {
-            if (chr == '\"') {
-                escaped += '\\';
-            }
-            escaped += chr;
+    bool const needs_quotes = str.find_first_of(" &<>|()") != std::string::npos;
+    bool const has_quote = str.find('\"') != std::string::npos;
+    // A string with neither already renders as itself. This runs for every
+    // argument of every invocation, so the common case is two scans and a
+    // return - and both scans are plain, since constructing a std::regex is
+    // one of the most expensive operations in the standard library
+    if (!needs_quotes && !has_quote) {
+        return;
+    }
+    std::string rendered;
+    rendered.reserve(str.size() + 8);
+    if (needs_quotes) {
+        rendered += '\"';
+    }
+    size_t backslashes = 0;
+    for (char const chr : str) {
+        if (chr == '\\') {
+            ++backslashes;
+            continue;
         }
-        str = std::move(escaped);
+        // A run preceding a quote is doubled so that it escapes itself
+        // rather than the quote
+        rendered.append(chr == '\"' ? backslashes * 2 + 1 : backslashes, '\\');
+        backslashes = 0;
+        rendered += chr;
     }
-    if (str.find_first_of(" &<>|()") != std::string::npos) {
-        // There are spaces or special characters in string, quote it
-        str.insert(str.begin(), '\"');
-        str += '\"';
+    // A trailing run precedes the closing quote
+    rendered.append(needs_quotes ? backslashes * 2 : backslashes, '\\');
+    if (needs_quotes) {
+        rendered += '\"';
     }
+    str = std::move(rendered);
 }
 
 void quoteList(StrList& args) {
     for (std::string& arg : args) {
         quoteAsNeeded(arg);
     }
+}
+
+size_t QuotedCommandLength(const StrList& args) {
+    size_t length = 0;
+    for (const auto& arg : args) {
+        std::string rendered = arg;
+        quoteAsNeeded(rendered);
+        // Every argument carries one separator
+        length += rendered.size() + 1;
+    }
+    return length;
 }
 
 std::regex_constants::syntax_option_type composeRegexOptions(

@@ -6,10 +6,10 @@
 #include <cstddef>
 #include <fstream>
 #include <iostream>
+#include <process.h>
 #include <sstream>
 #include <string>
 #include <utility>
-#include <numeric>
 #include "linker_invocation.h"
 #include <errhandlingapi.h>
 #include "utils.h"
@@ -129,7 +129,6 @@ void LinkerInvocation::Parse() {
         std::string const name = strip(this->output_, ext);
         this->implibname_ = name + ".lib";
     }
-    this->makeRsp();
 }
 
 
@@ -181,29 +180,41 @@ void LinkerInvocation::processRSPFile(std::string const& rsp_file) {
  * \brief Ensure command line given to lib.exe is of appropriate length
  * max windows createProcess command line length is 32,767, so if we exceed
  * that, compose all input file args into an rsp.
- * 
- * Writes an rsp file named spack-build.rsp and sets it to be the only 
- * input file for the lib tool
+ *
+ * \param reserved the rendered length of the remainder of that command line
+ *
+ * Writes an rsp file holding one quoted input file per line and sets that
+ * file to be the only input file for the lib tool
+ *
+ * Returns whether an rsp file was written
  */
-bool LinkerInvocation::makeRsp() {
-    size_t const total_length = std::accumulate(
-        this->input_files_.begin(), this->input_files_.end(), size_t{0},
-        [](size_t sum, const std::string& s) { return sum + s.size(); });
-    if (total_length > MaxProcessCommandLength) {
-        std::string const rsp_name = "spack-build.rsp";
-        std::ofstream rsp_out(rsp_name);
-        if (!rsp_out) {
-            std::cerr << "Unable to open rsp out file: spack-build.rsp\n";
-            throw FileIOError("Unable to open lib rsp file");
-        }
-        for (const auto& line : this->input_files_) {
-            rsp_out << escape_backslash(line) << "\n";
-        }
-        rsp_out.close();
-        this->input_files_ = {"@" + rsp_name};
-        return true;
+bool LinkerInvocation::makeRsp(size_t reserved) {
+    // Lengths are measured as rendered on the command line: quoted, separated,
+    // and counting the terminating null the limit is inclusive of
+    if (reserved + QuotedCommandLength(this->input_files_) + 1 <=
+        MaxProcessCommandLength) {
+        return false;
     }
-    return false;
+    // The pid keeps this file distinct between concurrent links sharing a
+    // working directory
+    this->rsp_file_ = "spack-build-" + std::to_string(_getpid()) + ".rsp";
+    std::ofstream rsp_out(this->rsp_file_);
+    if (!rsp_out) {
+        std::cerr << "Unable to open rsp out file: " << this->rsp_file_ << "\n";
+        throw FileIOError("Unable to open lib rsp file");
+    }
+    for (const auto& line : this->input_files_) {
+        // Response files are tokenized with command line rules, so entries
+        // are rendered the same way arguments are
+        std::string entry = line;
+        quoteAsNeeded(entry);
+        rsp_out << entry << "\n";
+    }
+    rsp_out.close();
+    DEBUG_LOG("Wrote " + std::to_string(this->input_files_.size()) +
+              " input files to rsp file " + this->rsp_file_);
+    this->input_files_ = {"@" + this->rsp_file_};
+    return true;
 }
 
 /**
@@ -289,20 +300,18 @@ std::string LinkerInvocation::get_implib_name() const {
     return this->implibname_;
 }
 
-std::string LinkerInvocation::get_lib_link_args() const {
-    std::string lib_link_line;
+StrList LinkerInvocation::get_lib_link_args() const {
+    StrList lib_link_args;
     for (const auto& var_args : this->piped_args_) {
         // Most of these should be single arguments
         // however some can be defined multiple times
         // namely libpath and include
-        // this allows for all arguments to be processed
-        // correctly
-        auto vars = var_args.second;
-        if (!vars.empty()) {
-            lib_link_line += join(var_args.second);
-        }
+        // Each remains its own argument so that each is rendered
+        // independently onto the command line
+        lib_link_args.insert(lib_link_args.end(), var_args.second.begin(),
+                             var_args.second.end());
     }
-    return lib_link_line;
+    return lib_link_args;
 }
 
 std::string LinkerInvocation::get_def_file() const {
@@ -319,6 +328,10 @@ StrList LinkerInvocation::get_rc_files() const {
 
 StrList LinkerInvocation::get_input_files() const {
     return this->input_files_;
+}
+
+std::string LinkerInvocation::get_rsp_file() const {
+    return this->rsp_file_;
 }
 
 std::string LinkerInvocation::get_out() const {

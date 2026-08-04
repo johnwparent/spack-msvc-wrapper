@@ -71,11 +71,6 @@ DWORD LdInvocation::InvokeToolchain() {
         def_rename_cleanup.Keep();
     }
 
-    try {
-        link_run.makeRsp();
-    } catch (const FileIOError& e) {
-        return ExitConditions::FILE_IO_FAILURE;
-    }
     std::unique_ptr<RCFileManager> rc_file;
     try {
         // Run resource compiler to create
@@ -165,13 +160,26 @@ DWORD LdInvocation::InvokeToolchain() {
     std::string const abs_out_imp_lib_name = imp_lib_name + ".pe-abs.lib";
     std::string const def_file = link_run.get_def_file();
     std::string const def = "-def" + (def_file.empty() ? " " : ":" + def_file);
-    std::string piped_args = link_run.get_lib_link_args();
+    StrList const switches = {def, "-name:" + pe_name,
+                              "-out:" + abs_out_imp_lib_name};
+    StrList const piped_args = link_run.get_lib_link_args();
+    // The tool name and its separator are part of the command line the
+    // input files have to fit alongside
+    size_t const reserved = sizeof("lib.exe") +
+                            QuotedCommandLength(switches) +
+                            QuotedCommandLength(piped_args);
+    try {
+        link_run.makeRsp(reserved);
+    } catch (const FileIOError& e) {
+        return ExitConditions::FILE_IO_FAILURE;
+    }
+    // An rsp file, where one was written, is an intermediate of this
+    // invocation. An empty name is nothing to remove
+    ScopedTempFile const rsp_cleanup(link_run.get_rsp_file());
     // create command line to generate new import lib
     this->rpath_executor = ExecuteCommand(
-        "lib.exe",
-        LdInvocation::ComposeCommandLists({{def, piped_args, "-name:" + pe_name,
-                                            "-out:" + abs_out_imp_lib_name},
-                                           link_run.get_input_files()}));
+        "lib.exe", LdInvocation::ComposeCommandLists(
+                       {switches, piped_args, link_run.get_input_files()}));
     this->rpath_executor.Execute();
     DWORD const err_code = this->rpath_executor.Join();
     // lib.exe's outputs (the temporary import lib, which the rename below

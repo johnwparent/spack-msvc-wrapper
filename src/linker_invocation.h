@@ -23,8 +23,10 @@ class LinkerInvocation {
     bool def_file_is_temp() const;
     StrList get_rc_files() const;
     StrList get_input_files() const;
-    std::string get_lib_link_args() const;
-    bool makeRsp();
+    StrList get_lib_link_args() const;
+    // Name of the rsp file written by makeRsp, empty if none was written
+    std::string get_rsp_file() const;
+    bool makeRsp(size_t reserved);
     bool isHelp() const;
 
    private:
@@ -36,6 +38,7 @@ class LinkerInvocation {
     std::string implibname_;
     std::string def_file_;
     std::string output_;
+    std::string rsp_file_;
     StrList rsp_files_;
     StrList rc_files_;
     StrList command_files_;
