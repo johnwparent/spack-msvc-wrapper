@@ -268,6 +268,15 @@ bool LibRename::ComputeDefFile() {
     this->def_executor.Execute(this->tmp_def_file);
     DWORD const def_res = this->def_executor.Join();
     if (def_res) {
+        // dumpbin's stdout and stderr were both captured into tmp_def_file;
+        // surface them now, since the file is about to be deleted and this
+        // is otherwise the only record of why dumpbin failed
+        std::cerr << "dumpbin.exe failed with exit code " << def_res
+                  << " while computing exports for " << this->coff << "\n";
+        std::ifstream dumpbin_output(this->tmp_def_file);
+        if (dumpbin_output.is_open()) {
+            std::cerr << dumpbin_output.rdbuf();
+        }
         return false;
     }
     std::ifstream input_file(this->tmp_def_file);
@@ -332,11 +341,13 @@ bool LibRename::ExecuteRename() {
     if (!this->coff.empty()) {
         // Extract DLL
         if (!this->ComputeDefFile()) {
-            debug("Failed to compute def file");
+            std::cerr << "Failed to compute def file for " << this->coff
+                      << "\n";
             return false;
         }
         if (!this->ExecuteLibRename()) {
-            debug("Failed to create and rename import lib");
+            std::cerr << "Failed to create and rename import lib for "
+                      << this->coff << "\n";
             return false;
         }
     }
