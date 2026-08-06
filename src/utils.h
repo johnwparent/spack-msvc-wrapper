@@ -352,20 +352,21 @@ class ScopedFileAccess {
 };
 
 /**
- * Removes a temporary file when the enclosing scope exits, unless the file
- * was handed off (e.g. renamed over its final destination) via Keep().
+ * Removes a temporary file when the enclosing scope exits
  *
  * A missing file at destruction time is not an error; it simply means the
  * file was consumed by an intermediate step (or never produced).
  */
-class ScopedTempFile {
+class ScopedFile {
    public:
-    explicit ScopedTempFile(std::string file_path);
-    ~ScopedTempFile();
-    ScopedTempFile(const ScopedTempFile&) = delete;
-    ScopedTempFile& operator=(const ScopedTempFile&) = delete;
-    // Disarm the guard; the file is a deliverable and should survive
-    void Keep();
+    explicit ScopedFile(std::string file_path);
+    ScopedFile(std::string file_path, bool keep);
+    ~ScopedFile();
+    ScopedFile(const ScopedFile&) = delete;
+    ScopedFile& operator=(const ScopedFile&) = delete;
+    ScopedFile(ScopedFile&&) noexcept;
+    ScopedFile& operator=(ScopedFile&&) noexcept;
+    std::string file() const;
 
    private:
     std::string file_path_;

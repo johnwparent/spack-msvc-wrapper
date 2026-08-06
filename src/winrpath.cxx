@@ -273,7 +273,7 @@ bool LibRename::ComputeDefFile() {
     this->def_executor.CleanupHandles();
     // tmp_def_file is scratch regardless of outcome; remove it on every
     // exit path, including dumpbin failures that leave partial output
-    ScopedTempFile const tmp_def_cleanup(this->tmp_def_file);
+    ScopedFile const tmp_def_cleanup(this->tmp_def_file);
     if (def_res) {
         // dumpbin's stdout and stderr were both captured into tmp_def_file;
         // surface them now, since the file is about to be deleted and this
@@ -383,9 +383,9 @@ bool LibRename::ExecuteLibRename() {
     // outputs (the temporary import lib, which the rename below consumes
     // on success, and a .exp byproduct) are scratch — make sure none of
     // them survive this function, whichever path exits it
-    ScopedTempFile const def_cleanup(this->def_file);
-    ScopedTempFile const new_lib_cleanup(this->new_lib);
-    ScopedTempFile const exp_cleanup(stem(this->new_lib) + ".exp");
+    ScopedFile const def_cleanup(this->def_file);
+    ScopedFile const new_lib_cleanup(this->new_lib);
+    ScopedFile const exp_cleanup(stem(this->new_lib) + ".exp");
     if (ret_code != 0) {
         std::cerr << "Lib Rename failed with exit code: " << ret_code << "\n";
         return false;

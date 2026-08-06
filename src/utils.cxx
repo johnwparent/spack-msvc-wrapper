@@ -1170,10 +1170,13 @@ bool ScopedFileAccess::IsAccessGranted() const {
                                        current_user_sid_.get());
 }
 
-ScopedTempFile::ScopedTempFile(std::string file_path)
+ScopedFile::ScopedFile(std::string file_path)
     : file_path_(std::move(file_path)), keep_(false) {}
 
-ScopedTempFile::~ScopedTempFile() {
+ScopedFile::ScopedFile(std::string file_path, bool keep) 
+    : file_path_(std::move(file_path)), keep_(keep) {}
+
+ScopedFile::~ScopedFile() {
     if (keep_) {
         return;
     }
@@ -1188,8 +1191,22 @@ ScopedTempFile::~ScopedTempFile() {
     }
 }
 
-void ScopedTempFile::Keep() {
-    this->keep_ = true;
+ScopedFile::ScopedFile(ScopedFile&& other) noexcept
+    : file_path_(std::exchange(other.file_path_, "")), keep_(std::exchange(other.keep_, true)) {}
+
+ScopedFile& ScopedFile::operator=(ScopedFile&& other) noexcept {
+    if (this != &other) {
+        if (!file_path_.empty()) {
+            std::remove(file_path_.c_str());
+        }
+        file_path_ = std::exchange(other.file_path_, "");
+        keep_ = std::exchange(other.keep_, false);
+    }
+    return *this;
+}
+
+std::string ScopedFile::file() const {
+    return this->file_path_;
 }
 
 NameTooLongError::NameTooLongError(char const* const message)

@@ -63,14 +63,6 @@ DWORD LdInvocation::InvokeToolchain() {
         return ToolChainInvocation::InvokeToolchain();
     }
 
-    // Parsing a def file that names its output rewrites it into a temporary
-    // "-rename.def" copy (sans NAME/LIBRARY) for the import lib regeneration
-    // below; that copy is scratch and should not outlive this invocation
-    ScopedTempFile def_rename_cleanup(link_run.get_def_file());
-    if (!link_run.def_file_is_temp()) {
-        def_rename_cleanup.Keep();
-    }
-
     try {
         link_run.makeRsp();
     } catch (const FileIOError& e) {
@@ -177,8 +169,8 @@ DWORD LdInvocation::InvokeToolchain() {
     // lib.exe's outputs (the temporary import lib, which the rename below
     // consumes on success, and a .exp byproduct) are scratch — make sure
     // neither survives this function, whichever path exits it
-    ScopedTempFile const abs_lib_cleanup(abs_out_imp_lib_name);
-    ScopedTempFile const exp_cleanup(stem(abs_out_imp_lib_name) + ".exp");
+    ScopedFile const abs_lib_cleanup(abs_out_imp_lib_name);
+    ScopedFile const exp_cleanup(stem(abs_out_imp_lib_name) + ".exp");
     if (err_code != 0) {
         return err_code;
     }
