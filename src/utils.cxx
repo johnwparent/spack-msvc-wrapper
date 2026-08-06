@@ -1170,6 +1170,45 @@ bool ScopedFileAccess::IsAccessGranted() const {
                                        current_user_sid_.get());
 }
 
+ScopedFile::ScopedFile(std::string file_path)
+    : file_path_(std::move(file_path)), keep_(false) {}
+
+ScopedFile::ScopedFile(std::string file_path, bool keep) 
+    : file_path_(std::move(file_path)), keep_(keep) {}
+
+ScopedFile::~ScopedFile() {
+    if (keep_) {
+        return;
+    }
+    if (!DeleteFileA(file_path_.c_str())) {
+        DWORD const err = ::GetLastError();
+        // The file having already been consumed (renamed away or never
+        // produced) is the common success case, not a cleanup failure
+        if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PATH_NOT_FOUND) {
+            debug("Failed to remove temporary file " + file_path_ + ": " +
+                  reportLastError());
+        }
+    }
+}
+
+ScopedFile::ScopedFile(ScopedFile&& other) noexcept
+    : file_path_(std::exchange(other.file_path_, "")), keep_(std::exchange(other.keep_, true)) {}
+
+ScopedFile& ScopedFile::operator=(ScopedFile&& other) noexcept {
+    if (this != &other) {
+        if (!file_path_.empty()) {
+            std::remove(file_path_.c_str());
+        }
+        file_path_ = std::exchange(other.file_path_, "");
+        keep_ = std::exchange(other.keep_, false);
+    }
+    return *this;
+}
+
+std::string ScopedFile::file() const {
+    return this->file_path_;
+}
+
 NameTooLongError::NameTooLongError(char const* const message)
     : std::runtime_error(message) {}
 

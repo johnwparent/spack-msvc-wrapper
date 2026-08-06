@@ -351,6 +351,28 @@ class ScopedFileAccess {
     bool attributes_changed_;
 };
 
+/**
+ * Removes a temporary file when the enclosing scope exits
+ *
+ * A missing file at destruction time is not an error; it simply means the
+ * file was consumed by an intermediate step (or never produced).
+ */
+class ScopedFile {
+   public:
+    explicit ScopedFile(std::string file_path);
+    ScopedFile(std::string file_path, bool keep);
+    ~ScopedFile();
+    ScopedFile(const ScopedFile&) = delete;
+    ScopedFile& operator=(const ScopedFile&) = delete;
+    ScopedFile(ScopedFile&&) noexcept;
+    ScopedFile& operator=(ScopedFile&&) noexcept;
+    std::string file() const;
+
+   private:
+    std::string file_path_;
+    bool keep_;
+};
+
 const std::map<char, char> special_character_to_path{{'|', '\\'}, {';', ':'}};
 
 const std::map<char, char> path_to_special_characters{{'\\', '|'},

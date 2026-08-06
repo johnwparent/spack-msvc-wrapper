@@ -33,13 +33,13 @@ class ExecuteCommand {
     ~ExecuteCommand();
     bool Execute(const std::string& filename = empty);
     DWORD Join();
+    int CleanupHandles();
 
    private:
     void SetupExecute();
     bool ExecuteToolChainChild();
     int PipeChildToStdStream(DWORD STD_HANDLE, HANDLE reader_handle);
     int CreateChildPipes();
-    int CleanupHandles();
     DWORD ReportExitCode();
     // Holds the exit code of the
     // pipe from child process stdout

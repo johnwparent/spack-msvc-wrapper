@@ -33,7 +33,7 @@ class LinkerInvocation {
     std::string line_;
     std::string pe_name_;
     std::string implibname_;
-    std::string def_file_;
+    std::unique_ptr<ScopedFile> def_file_ = nullptr;
     std::string output_;
     StrList rsp_files_;
     StrList rc_files_;

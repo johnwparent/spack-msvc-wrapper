@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -70,7 +71,7 @@ void LinkerInvocation::ProcessTokens(const std::string &normal_token, const std:
         this->rc_files_.push_back(token);
         this->input_files_.push_back(token);
     } else if (startswith(normal_token, "def")) {
-        this->def_file_ = stripquotes(split(token, ":", 1)[1]);
+        this->def_file_ = std::make_unique<ScopedFile>(stripquotes(split(token, ":", 1)[1]), true);
     } else if (this->piped_args_.find(normal_token) !=
                 this->piped_args_.end()) {
         this->piped_args_.at(normal_token).emplace_back(token);
@@ -134,6 +135,13 @@ void LinkerInvocation::Parse() {
 
 
 std::string handleQuotedStrings(std::stringstream& ss, std::string &input) {
+    // A token that already ends with its closing quote is complete
+    // (a quoted path without spaces); consuming further tokens here
+    // would merge unrelated arguments into one garbage token
+    if (input.length() > 1 && input.back() == '"') {
+        input = stripquotes(input);
+        return input;
+    }
     std::string token;
     while (ss >> token) {
         input += " " + token;
@@ -205,18 +213,18 @@ bool LinkerInvocation::makeRsp() {
  *  If found the LinkerInvocation name_ attribute is assigned
  *  to the def file defined library name
  *  and the def file is re-written without that name for use
- *  if our lib pass so we can easily compose an absolute path'd
+ *  in our lib pass so we can easily compose an absolute path'd
  *  version of that name
  */
 void LinkerInvocation::processDefFile() {
 
-    if (this->def_file_.empty()) {
+    if (this->def_file_ == nullptr) {
         return;
     }
     // Def from link line
-    std::ifstream def_in(this->def_file_);
+    std::ifstream def_in(this->def_file_->file());
     if (!def_in) {
-        std::cerr << "Error: Could not open input def file: " << this->def_file_
+        std::cerr << "Error: Could not open input def file: " << this->def_file_->file()
                   << "\n";
         throw FileIOError("Cannot open def input file: " + GetLastError());
     }
@@ -257,9 +265,9 @@ void LinkerInvocation::processDefFile() {
         if (this->output_.empty()) {
             this->output_ = join({GetCWD(), this->pe_name_}, "\\");
         }
-        const std::string def_name = stem(this->def_file_);
+        const std::string def_name = stem(this->def_file_->file());
         const std::string def_path =
-            this->def_file_.substr(0, this->def_file_.find(def_name));
+            this->def_file_->file().substr(0, this->def_file_->file().find(def_name));
         const std::string rename_def = def_path + def_name + "-rename.def";
 
         std::ofstream def_out(rename_def);
@@ -272,7 +280,7 @@ void LinkerInvocation::processDefFile() {
             def_out << line << "\n";
         }
         def_out.close();
-        this->def_file_ = rename_def;
+        this->def_file_ = std::make_unique<ScopedFile>(rename_def);
     }
     def_in.close();
 }
@@ -298,7 +306,12 @@ std::string LinkerInvocation::get_lib_link_args() const {
 }
 
 std::string LinkerInvocation::get_def_file() const {
-    return this->def_file_;
+    if (def_file_ != nullptr){
+        return this->def_file_->file();
+    }
+    else {
+        return std::string();
+    }
 }
 
 StrList LinkerInvocation::get_rc_files() const {
