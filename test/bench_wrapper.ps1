@@ -59,9 +59,8 @@ $Wrapper = (Resolve-Path $Wrapper).Path
 # Locate the real compiler.
 #
 # This must positively identify the MSVC toolchain rather than just taking the
-# first cl.exe on PATH that is not $Wrapper: any *other* copy of the wrapper
-# would be accepted, and pointing the wrapper's SPACK_CC at a wrapper produces
-# an unbounded chain of processes.
+# first cl.exe on PATH, pointing the wrapper's SPACK_CC at any wrapper from here
+# produces an unbounded chain of processes.
 # ---------------------------------------------------------------------------
 function Test-IsMsvcCompiler {
     param([string] $Path)
@@ -100,12 +99,9 @@ Write-Host "Real cl : $realCl"
 Write-Host "Jobs    : $Jobs   Iterations: $Iterations"
 Write-Host ""
 
-# ---------------------------------------------------------------------------
-# Minimal Spack environment - the wrapper refuses to run without these
-# ---------------------------------------------------------------------------
 $env:SPACK_CC                    = $realCl
 $env:SPACK_CXX                   = $realCl
-# Resolve the linker next to the compiler for the same reason: a bare
+# Resolve the linker next to the compiler, a bare
 # "link.exe" could resolve to a wrapper symlink
 $env:SPACK_LD                    = Join-Path (Split-Path -Parent $realCl) 'link.exe'
 $env:SPACK_COMPILER_WRAPPER_PATH = $repoRoot
@@ -114,7 +110,7 @@ $env:SPACK_DEBUG_LOG_ID          = 'BENCH'
 $env:SPACK_SHORT_SPEC            = 'bench%msvc'
 $env:SPACK_SYSTEM_DIRS           = $env:PATH
 $env:SPACK_MANAGED_DIRS          = $WorkDir
-# Debug reporting off - measure the wrapper, not the console
+
 Remove-Item Env:\SPACK_DEBUG_WRAPPER -ErrorAction SilentlyContinue
 
 if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
@@ -170,7 +166,7 @@ function Invoke-Compile {
 }
 
 # ---------------------------------------------------------------------------
-# 1. Wrapper CPU time vs. child wall time, single compile
+# Wrapper CPU time vs. child wall time, single compile
 # ---------------------------------------------------------------------------
 Write-Host '--- Single compile: wrapper CPU vs. wall time ---'
 # warm the filesystem / compiler caches first
@@ -194,7 +190,7 @@ if ($ratio -gt 0.5) {
 Write-Host ''
 
 # ---------------------------------------------------------------------------
-# 2. Batch wall clock, serial and parallel, wrapper vs. direct
+# Batch wall clock, serial and parallel, wrapper vs. direct
 # ---------------------------------------------------------------------------
 function Measure-Batch {
     param([string] $Exe, [int] $Count, [int] $Parallel)
