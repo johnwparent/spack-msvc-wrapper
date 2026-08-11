@@ -24,7 +24,7 @@
 struct SpackEnvState {
     // NOTE: the four flag lists below are read from the environment but never
     // applied to any command line. That is an unimplemented feature (Spack's
-    // per-package compiler flags are silently dropped), not dead weight -
+    // per-package compiler flags are silently dropped)
     // see the note in LoadSpackEnvState.
     StrList SpackFFlags;
     StrList SpackCFlags;

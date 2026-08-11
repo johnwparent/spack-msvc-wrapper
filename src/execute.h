@@ -28,18 +28,7 @@ const std::string empty = std::string();
  * pointed at that file instead. That is used by the relocation path to capture
  * dumpbin's export listing; nothing on the compile or link path needs it.
  *
- * Two invariants here are load-bearing for build throughput:
- *
- *  - Wait on the child, never poll it. Join() uses WaitForSingleObject. This
- *    previously spun on GetExitCodeProcess, which burned a full core per
- *    in-flight wrapper. That is free at -j1 and catastrophic at -jN: measured
- *    over 100 compiles at -j20, it cost 98% - the build took almost exactly
- *    twice as long through the wrapper as without it.
- *
- *  - Do not reintroduce per-invocation threads or output relaying. The wrapper
- *    never inspects the tool's output, so pumping it costs two pipes, three
- *    threads and a copy of every byte to accomplish nothing.
- */
+ * */
 class ExecuteCommand {
    public:
     // constructor for single executable/arguments + command in one string

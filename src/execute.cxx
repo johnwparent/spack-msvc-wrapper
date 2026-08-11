@@ -186,8 +186,7 @@ std::string ExecuteCommand::ComposeCLI() const {
     // CreateProcessW is called without an lpApplicationName, so the command
     // line itself has to identify the executable. An unquoted path containing
     // spaces makes Windows probe each prefix in turn (C:\Program.exe, ...)
-    // before finding the real tool - a filesystem probe per invocation, and a
-    // hijack opportunity for whoever can drop a file at one of those prefixes.
+    // before finding the real tool - a filesystem probe per invocation
     bool const needs_quoting =
         this->base_command.find_first_of(" \t") != std::string::npos &&
         this->base_command.front() != '\"';
